@@ -111,6 +111,22 @@ export function SettingsPage() {
     setOperationMessage('Mock 事件已写入 Raw Event Viewer，并已尝试保存到 raw events。');
   };
 
+  const clearSavedRawEvents = async () => {
+    stream.clearEvents();
+
+    if (!isTauriRuntime()) {
+      setOperationMessage('当前是浏览器开发环境，只清空了前端事件列表。');
+      return;
+    }
+
+    try {
+      await callTauriCommand<void>('clear_raw_events');
+      setOperationMessage('Raw events 文件已清空，可以重新采集干净样本。');
+    } catch (error) {
+      setOperationMessage(`清空 raw events 失败：${errorToMessage(error)}`);
+    }
+  };
+
   return (
     <PlaceholderPanel title="设置与调试" description="M1 阶段用于配置 GBFR-ACT、连接 WebSocket、查看 raw events 和诊断本地环境。">
       <div className="settings-grid">
@@ -166,6 +182,7 @@ export function SettingsPage() {
             <button type="button" onClick={stream.connect}>连接 WebSocket</button>
             <button type="button" onClick={stream.disconnect}>断开</button>
             <button type="button" onClick={() => void pushMockEvents()}>写入 Mock 事件</button>
+            <button type="button" onClick={() => void clearSavedRawEvents()}>清空 Raw Events</button>
           </div>
         </section>
       </div>

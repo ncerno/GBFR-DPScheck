@@ -1,8 +1,9 @@
 use serde_json::Value;
-use tauri::AppHandle;
+use tauri::{AppHandle, State};
 
 use crate::config::{AppConfig, AppDiagnostics};
 use crate::gbfr_act::GbfrActServiceStatus;
+use crate::storage::StorageState;
 
 #[tauri::command]
 pub async fn get_app_config(app: AppHandle) -> Result<AppConfig, String> {
@@ -32,11 +33,27 @@ pub async fn start_gbfr_act_service(app: AppHandle) -> Result<GbfrActServiceStat
 }
 
 #[tauri::command]
-pub async fn save_raw_event(app: AppHandle, event: Value) -> Result<(), String> {
-    crate::storage::save_raw_event(&app, event).await
+pub async fn save_raw_event(
+    app: AppHandle,
+    storage_state: State<'_, StorageState>,
+    event: Value,
+) -> Result<(), String> {
+    crate::storage::save_raw_event(&app, &storage_state, event).await
 }
 
 #[tauri::command]
-pub async fn save_combat_summary(app: AppHandle, summary: Value) -> Result<(), String> {
-    crate::storage::save_summary(&app, summary).await
+pub async fn save_combat_summary(
+    app: AppHandle,
+    storage_state: State<'_, StorageState>,
+    summary: Value,
+) -> Result<(), String> {
+    crate::storage::save_summary(&app, &storage_state, summary).await
+}
+
+#[tauri::command]
+pub async fn clear_raw_events(
+    app: AppHandle,
+    storage_state: State<'_, StorageState>,
+) -> Result<(), String> {
+    crate::storage::clear_raw_events(&app, &storage_state)
 }

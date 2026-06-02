@@ -5,6 +5,7 @@ export type TauriCommandName =
   | 'start_gbfr_act_service'
   | 'save_raw_event'
   | 'save_combat_summary'
+  | 'clear_raw_events'
   | 'get_app_diagnostics';
 
 export async function callTauriCommand<T>(command: TauriCommandName, args?: Record<string, unknown>): Promise<T> {
