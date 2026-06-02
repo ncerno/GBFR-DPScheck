@@ -151,6 +151,82 @@ th {
   gap: 14px;
 }
 
+.dashboard-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+.record-list-panel,
+.dashboard-main-panel,
+.dashboard-section {
+  border: 1px solid rgba(159, 176, 204, 0.14);
+  border-radius: 14px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.dashboard-main-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.dashboard-section h3,
+.record-list-panel h3 {
+  margin: 0 0 12px;
+}
+
+.record-list {
+  display: grid;
+  gap: 8px;
+}
+
+.record-list__item {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  text-align: left;
+  border-radius: 12px;
+}
+
+.record-list__item.active {
+  color: #06101f;
+  background: #8db7ff;
+  border-color: #8db7ff;
+}
+
+.record-list__item span {
+  font-size: 13px;
+  opacity: 0.82;
+}
+
+.party-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.party-card {
+  display: grid;
+  gap: 6px;
+  border: 1px solid rgba(159, 176, 204, 0.12);
+  border-radius: 12px;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.party-card span {
+  color: #9fb0cc;
+  font-size: 13px;
+}
+
+@media (max-width: 820px) {
+  .dashboard-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
 .dashboard-grid article,
 .settings-list,
 .placeholder-form {

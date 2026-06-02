@@ -14,7 +14,7 @@ export function App() {
 
   const pageMap: Record<AppRouteKey, JSX.Element> = {
     overlay: <OverlayPage runtime={runtime} />,
-    dashboard: <DashboardPage />,
+    dashboard: <DashboardPage runtime={runtime} />,
     loadout: <LoadoutPage />,
     settings: <SettingsPage runtime={runtime} />,
   };
