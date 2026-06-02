@@ -145,6 +145,22 @@ th {
   font-weight: 500;
 }
 
+.selectable-row {
+  cursor: pointer;
+}
+
+.selectable-row:hover {
+  background: rgba(141, 183, 255, 0.1);
+}
+
+.selectable-row.active {
+  background: rgba(141, 183, 255, 0.18);
+}
+
+.selectable-row.active td:first-child {
+  border-left: 3px solid #8db7ff;
+}
+
 .dashboard-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));

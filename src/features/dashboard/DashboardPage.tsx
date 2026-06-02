@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { PlaceholderPanel } from '../../components/PlaceholderPanel';
 import type { AppRuntime } from '../../app/useAppRuntime';
 import type { CombatActionStats, CombatActorStats, CombatRecord } from '../../combat/models';
@@ -10,6 +10,7 @@ interface DashboardPageProps {
 export function DashboardPage({ runtime }: DashboardPageProps) {
   const records = runtime.combatReplay.records;
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
+  const [selectedActorId, setSelectedActorId] = useState<string | null>(null);
 
   const selectedRecord = useMemo(() => {
     if (records.length === 0) {
@@ -19,15 +20,39 @@ export function DashboardPage({ runtime }: DashboardPageProps) {
     return records.find((record) => record.id === selectedRecordId) ?? records[records.length - 1];
   }, [records, selectedRecordId]);
 
-  const selectedActor = selectedRecord?.actors[0];
+  const selectedActor = useMemo(() => {
+    if (!selectedRecord || selectedRecord.actors.length === 0) {
+      return undefined;
+    }
+
+    return selectedRecord.actors.find((actor) => actor.id === selectedActorId) ?? selectedRecord.actors[0];
+  }, [selectedActorId, selectedRecord]);
+
+  useEffect(() => {
+    if (!selectedRecord) {
+      setSelectedActorId(null);
+      return;
+    }
+
+    if (selectedActorId && selectedRecord.actors.some((actor) => actor.id === selectedActorId)) {
+      return;
+    }
+
+    setSelectedActorId(selectedRecord.actors[0]?.id ?? null);
+  }, [selectedActorId, selectedRecord]);
+
+  const handleSelectRecord = (recordId: string) => {
+    setSelectedRecordId(recordId);
+    setSelectedActorId(null);
+  };
 
   return (
-    <PlaceholderPanel title="战后分析" description="基于当前会话 raw events 的战后分析。后续会接入本地历史记录读取。">
+    <PlaceholderPanel title="战后分析" description="基于当前会话 raw events 的战后分析。后续会接入更完整的历史记录管理。">
       <div className="dashboard-layout">
         <aside className="record-list-panel">
           <h3>战斗记录</h3>
           {records.length === 0 ? (
-            <p className="empty-state">暂无记录。请先在设置页连接 WebSocket 并产生伤害事件。</p>
+            <p className="empty-state">暂无记录。请先在设置页连接 WebSocket，或加载本地 Raw Events。</p>
           ) : (
             <div className="record-list">
               {records.map((record, index) => (
@@ -35,7 +60,7 @@ export function DashboardPage({ runtime }: DashboardPageProps) {
                   key={record.id}
                   className={record.id === selectedRecord?.id ? 'record-list__item active' : 'record-list__item'}
                   type="button"
-                  onClick={() => setSelectedRecordId(record.id)}
+                  onClick={() => handleSelectRecord(record.id)}
                 >
                   <strong>记录 {index + 1}</strong>
                   <span>{formatNumber(record.totalDamage)} 伤害</span>
@@ -50,7 +75,11 @@ export function DashboardPage({ runtime }: DashboardPageProps) {
           {selectedRecord ? (
             <>
               <RecordOverview record={selectedRecord} />
-              <TeamTable record={selectedRecord} />
+              <TeamTable
+                record={selectedRecord}
+                selectedActorId={selectedActor?.id}
+                onSelectActor={setSelectedActorId}
+              />
               <ActionTable actor={selectedActor} />
               <PartyInfo record={selectedRecord} />
             </>
@@ -91,7 +120,13 @@ function RecordOverview({ record }: { record: CombatRecord }) {
   );
 }
 
-function TeamTable({ record }: { record: CombatRecord }) {
+interface TeamTableProps {
+  record: CombatRecord;
+  selectedActorId?: string;
+  onSelectActor: (actorId: string) => void;
+}
+
+function TeamTable({ record, selectedActorId, onSelectActor }: TeamTableProps) {
   return (
     <section className="dashboard-section">
       <h3>队伍详情</h3>
@@ -113,7 +148,11 @@ function TeamTable({ record }: { record: CombatRecord }) {
           </thead>
           <tbody>
             {record.actors.map((actor, index) => (
-              <tr key={actor.id}>
+              <tr
+                key={actor.id}
+                className={actor.id === selectedActorId ? 'selectable-row active' : 'selectable-row'}
+                onClick={() => onSelectActor(actor.id)}
+              >
                 <td>{index + 1}</td>
                 <td>{actor.name}</td>
                 <td>{formatNumber(actor.totalDamage)}</td>
@@ -134,7 +173,12 @@ function TeamTable({ record }: { record: CombatRecord }) {
 function ActionTable({ actor }: { actor?: CombatActorStats }) {
   return (
     <section className="dashboard-section">
-      <h3>技能详情{actor ? `：${actor.name}` : ''}</h3>
+      <div className="section-title-row">
+        <div>
+          <h3>技能详情{actor ? `：${actor.name}` : ''}</h3>
+          <p>点击上方队伍成员可切换查看对象。</p>
+        </div>
+      </div>
       {!actor || actor.actions.length === 0 ? (
         <p className="empty-state">暂无技能伤害数据。</p>
       ) : (
@@ -160,7 +204,7 @@ function ActionTable({ actor }: { actor?: CombatActorStats }) {
 
 function ActionRow({ action }: { action: CombatActionStats }) {
   return (
-    <tr>
+    <tr title={`内部调试：${action.damageEventCount} 条伤害事件`}>
       <td>{action.name}</td>
       <td>{formatNumber(action.totalDamage)}</td>
       <td>{formatPercent(action.damageRate)}</td>
