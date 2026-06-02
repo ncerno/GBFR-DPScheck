@@ -7,6 +7,7 @@ import type { GbfrActRawEvent } from '../../gbfr-act/events';
 import { useGbfrActStream } from '../../gbfr-act/useGbfrActStream';
 import { callTauriCommand, isTauriRuntime } from '../../tauri/commands';
 import { mockGbfrActEvents } from '../debug/mockEvents';
+import { CombatSummaryPanel } from '../debug/CombatSummaryPanel';
 import { RawEventViewer } from '../debug/RawEventViewer';
 
 export function SettingsPage() {
@@ -209,6 +210,7 @@ export function SettingsPage() {
         </section>
       ) : null}
 
+      <CombatSummaryPanel events={stream.events} />
       <RawEventViewer events={stream.events} parseErrors={stream.parseErrors} onClear={stream.clearEvents} />
     </PlaceholderPanel>
   );

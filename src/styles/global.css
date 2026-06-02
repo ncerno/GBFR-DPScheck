@@ -289,12 +289,38 @@ th {
   background: #ff8a9a;
 }
 
-.raw-event-viewer {
+.raw-event-viewer,
+.combat-summary-panel {
   margin-top: 18px;
   border: 1px solid rgba(159, 176, 204, 0.14);
   border-radius: 14px;
   padding: 14px;
   background: rgba(255, 255, 255, 0.04);
+}
+
+.summary-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin: 12px 0 16px;
+}
+
+.summary-cards article {
+  border: 1px solid rgba(159, 176, 204, 0.12);
+  border-radius: 12px;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.summary-cards span {
+  display: block;
+  margin-bottom: 6px;
+  color: #9fb0cc;
+  font-size: 13px;
+}
+
+.summary-cards strong {
+  font-size: 22px;
 }
 
 .section-title-row {
