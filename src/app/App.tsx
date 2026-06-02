@@ -4,18 +4,20 @@ import { LoadoutPage } from '../features/loadout/LoadoutPage';
 import { OverlayPage } from '../features/overlay/OverlayPage';
 import { SettingsPage } from '../features/settings/SettingsPage';
 import { appRoutes, type AppRouteKey } from './routes';
-
-const pageMap: Record<AppRouteKey, JSX.Element> = {
-  overlay: <OverlayPage />,
-  dashboard: <DashboardPage />,
-  loadout: <LoadoutPage />,
-  settings: <SettingsPage />,
-};
+import { useAppRuntime } from './useAppRuntime';
 
 export function App() {
   const [route, setRoute] = useState<AppRouteKey>('overlay');
+  const runtime = useAppRuntime();
 
   const currentTitle = useMemo(() => appRoutes.find((item) => item.key === route)?.label, [route]);
+
+  const pageMap: Record<AppRouteKey, JSX.Element> = {
+    overlay: <OverlayPage runtime={runtime} />,
+    dashboard: <DashboardPage />,
+    loadout: <LoadoutPage />,
+    settings: <SettingsPage runtime={runtime} />,
+  };
 
   return (
     <main className="app-shell">
