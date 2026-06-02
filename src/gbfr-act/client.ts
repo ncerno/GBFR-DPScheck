@@ -6,6 +6,7 @@ export interface GbfrActClientOptions {
   onOpen?: () => void;
   onClose?: () => void;
   onError?: (error: Event) => void;
+  onParseError?: (raw: string, error: unknown) => void;
 }
 
 export class GbfrActClient {
@@ -42,6 +43,7 @@ export class GbfrActClient {
       this.options.onEvent(parsed);
     } catch (error) {
       console.warn('无法解析 GBFR-ACT 事件', error);
+      this.options.onParseError?.(data, error);
     }
   }
 }

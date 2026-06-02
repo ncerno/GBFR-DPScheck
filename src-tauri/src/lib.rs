@@ -14,6 +14,7 @@ pub fn run() {
             commands::start_gbfr_act_service,
             commands::save_raw_event,
             commands::save_combat_summary,
+            commands::get_app_diagnostics,
         ])
         .run(tauri::generate_context!())
         .expect("启动 GBFR-DPScheck 失败");
