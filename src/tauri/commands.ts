@@ -5,6 +5,7 @@ export type TauriCommandName =
   | 'start_gbfr_act_service'
   | 'save_raw_event'
   | 'save_combat_summary'
+  | 'load_raw_events'
   | 'clear_raw_events'
   | 'get_app_diagnostics';
 

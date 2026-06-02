@@ -51,6 +51,14 @@ pub async fn save_combat_summary(
 }
 
 #[tauri::command]
+pub async fn load_raw_events(
+    app: AppHandle,
+    storage_state: State<'_, StorageState>,
+) -> Result<Vec<Value>, String> {
+    crate::storage::load_raw_events(&app, &storage_state)
+}
+
+#[tauri::command]
 pub async fn clear_raw_events(
     app: AppHandle,
     storage_state: State<'_, StorageState>,

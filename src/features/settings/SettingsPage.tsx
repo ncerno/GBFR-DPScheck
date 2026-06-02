@@ -21,6 +21,7 @@ export function SettingsPage({ runtime }: SettingsPageProps) {
     checkService,
     startService,
     clearSavedRawEvents,
+    loadSavedRawEvents,
     setOperationMessage,
   } = runtime;
 
@@ -86,6 +87,7 @@ export function SettingsPage({ runtime }: SettingsPageProps) {
             <button type="button" onClick={stream.connect}>连接 WebSocket</button>
             <button type="button" onClick={stream.disconnect}>断开</button>
             <button type="button" onClick={() => void pushMockEvents()}>写入 Mock 事件</button>
+            <button type="button" onClick={() => void loadSavedRawEvents()}>加载本地 Raw Events</button>
             <button type="button" onClick={() => void clearSavedRawEvents()}>清空 Raw Events</button>
           </div>
         </section>

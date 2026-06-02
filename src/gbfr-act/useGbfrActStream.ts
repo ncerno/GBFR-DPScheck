@@ -66,6 +66,13 @@ export function useGbfrActStream({ url, maxEvents = 200, onEvent }: UseGbfrActSt
     setStatus('disconnected');
   }, [setStatus]);
 
+  const pushEvents = useCallback((nextEvents: GbfrActRawEvent[]) => {
+    setEvents((current) => [...nextEvents, ...current].slice(0, maxEvents));
+    for (const event of nextEvents) {
+      void onEventRef.current?.(event);
+    }
+  }, [maxEvents]);
+
   const clearEvents = useCallback(() => {
     setEvents([]);
     setParseErrors([]);
@@ -81,7 +88,8 @@ export function useGbfrActStream({ url, maxEvents = 200, onEvent }: UseGbfrActSt
     disconnect,
     clearEvents,
     pushEvent,
-  }), [clearEvents, connect, connection, disconnect, events, parseErrors, pushEvent]);
+    pushEvents,
+  }), [clearEvents, connect, connection, disconnect, events, parseErrors, pushEvent, pushEvents]);
 }
 
 function eventToMessage(error: Event) {

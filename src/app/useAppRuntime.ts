@@ -123,6 +123,22 @@ export function useAppRuntime() {
     }
   }, [stream]);
 
+  const loadSavedRawEvents = useCallback(async () => {
+    if (!isTauriRuntime()) {
+      setOperationMessage('当前是浏览器开发环境，无法读取本地 raw events。');
+      return;
+    }
+
+    try {
+      const events = await callTauriCommand<GbfrActRawEvent[]>('load_raw_events');
+      stream.clearEvents();
+      stream.pushEvents(events.reverse());
+      setOperationMessage(`已加载 ${events.length} 条本地 raw events。`);
+    } catch (error) {
+      setOperationMessage(`加载 raw events 失败：${errorToMessage(error)}`);
+    }
+  }, [stream]);
+
   return {
     config,
     serviceStatus,
@@ -135,6 +151,7 @@ export function useAppRuntime() {
     checkService,
     startService,
     clearSavedRawEvents,
+    loadSavedRawEvents,
     setOperationMessage,
   };
 }

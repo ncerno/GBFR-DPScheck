@@ -27,6 +27,28 @@ pub async fn save_summary(app: &AppHandle, state: &StorageState, summary: Value)
     append_json_line(summaries_path(app)?, state, &summary)
 }
 
+pub fn load_raw_events(app: &AppHandle, state: &StorageState) -> Result<Vec<Value>, String> {
+    let _guard = state
+        .write_lock
+        .lock()
+        .map_err(|error| format!("锁定日志文件失败：{error}"))?;
+    let path = raw_events_path(app)?;
+
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+
+    let text = std::fs::read_to_string(&path)
+        .map_err(|error| format!("读取 raw events 失败 {}：{error}", path.display()))?;
+
+    // 这里不用按行解析：旧版本曾出现多个 JSON 对象粘在同一行的情况。
+    // serde_json 的流式反序列化可以兼容换行分隔和连续 JSON 对象。
+    serde_json::Deserializer::from_str(&text)
+        .into_iter::<Value>()
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| format!("解析 raw events 失败 {}：{error}", path.display()))
+}
+
 pub fn clear_raw_events(app: &AppHandle, state: &StorageState) -> Result<(), String> {
     let _guard = state
         .write_lock

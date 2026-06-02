@@ -16,6 +16,7 @@ pub fn run() {
             commands::save_raw_event,
             commands::save_combat_summary,
             commands::get_app_diagnostics,
+            commands::load_raw_events,
             commands::clear_raw_events,
         ])
         .run(tauri::generate_context!())
