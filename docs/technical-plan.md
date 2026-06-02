@@ -1,5 +1,52 @@
 # GBFR-DPScheck 技术方案
 
+## 0. 当前实现快照
+
+截至当前交接点，项目已完成到 M4/M5 的基础可用形态：
+
+```text
+GBFR-ACT WebSocket 接入
+  ↓
+raw events 保存 / 读取 / 清空
+  ↓
+事件标准化 normalizer
+  ↓
+战斗分段 segmenter
+  ↓
+基础统计 statistics
+  ↓
+Overlay 实时显示 + Dashboard 战后分析
+```
+
+已实现：
+
+- Tauri + React + TypeScript + Rust 框架。
+- 通过 GBFR-ACT WebSocket 消费事件，默认 `ws://127.0.0.1:24399`。
+- GBFR-ACT 服务检查和启动，优先通过 `uac_start.cmd` 请求管理员权限。
+- raw events 互斥写入，避免并发写入导致 JSON 粘连。
+- raw events 历史读取，兼容旧日志中多个 JSON 对象粘在同一行的情况。
+- `enter_area` / `load_party` / `damage` / `inc_death_cnt` 标准化。
+- 基础战斗分段：`enter_area` 分段 + 无伤害超时分段。
+- 基础统计：总伤害、DPS、最近 60 秒 DPS、伤害占比、死亡次数、动作伤害最小/最大/平均。
+- Overlay 接入最新战斗记录。
+- Dashboard 接入战斗记录列表、队伍详情、技能详情、队员切换、队伍/配装基础信息。
+- 设置页保留 Raw Event Viewer、统计预览、加载本地 Raw Events、清空 Raw Events。
+
+尚未实现：
+
+- rDPS 真实算法，当前只占位显示 `--` / `null`。
+- 技能动作名映射，当前显示 `动作 <action_id>`。
+- 配装测试真实保存和对比。
+- Overlay 独立透明小窗 / 点击穿透。
+- 按场次目录保存历史记录。
+- 安装包、自动依赖检测和公开发布文档。
+
+后续 Agent 请优先阅读：
+
+- `docs/current-progress.md`
+- `docs/development-log.md`
+- 本文件
+
 ## 1. 项目定位
 
 GBFR-DPScheck 是一个新的《碧蓝幻想 Relink》DPS 监测客户端。

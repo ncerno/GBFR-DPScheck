@@ -84,18 +84,38 @@ src-tauri/
 7. 做配装测试记录。
 8. 再考虑安装包、自动启动 GBFR-ACT、版本检查与公开发布。
 
+## 当前交接状态
+
+当前项目已经不只是框架，已经完成 GBFR-ACT WebSocket 接入、raw events 保存/读取、事件标准化、基础战斗分段、基础统计、Overlay 实时统计、Dashboard 战后分析和角色切换技能详情。
+
+后续 Agent 接手时请先读：
+
+1. `docs/current-progress.md`
+2. `docs/development-log.md`
+3. `docs/technical-plan.md`
+
+开发前先运行：
+
+```bash
+npm run build --prefix /d/yzy/GBFR-DPScheck
+```
+
+Rust 检查需要通过 Visual Studio DevCmd，避免 bash 误用 Git 自带 `link.exe`：
+
+```cmd
+call "C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
+cargo check --manifest-path "D:\yzy\GBFR-DPScheck\src-tauri\Cargo.toml"
+```
+
 ## 当前阶段范围
 
-当前只搭建项目框架，不做完整业务开发。
+下一步建议优先做配装测试页面真实接入：从当前 CombatRecord 创建测试记录、手动填写备注、保存本地测试历史、多轮对比。
 
-框架应包含：
+当前不要回退去重搭框架；框架和 M1/M2/M3 基础能力已经完成。新增功能时继续沿用现有分层：
 
-- 项目文档
-- package 配置
-- Vite / React / TypeScript 基础结构
-- Tauri 基础结构
-- 模块目录和占位文件
-- GBFR-ACT WebSocket 客户端占位
-- Combat 统计引擎占位
-- Overlay / Dashboard 页面占位
-- 配置和存储接口占位
+- 采集/连接：`src/gbfr-act/`
+- 应用级状态：`src/app/useAppRuntime.ts`
+- 统计逻辑：`src/combat/`
+- 页面功能：`src/features/`
+- 后端命令：`src-tauri/src/commands.rs`
+- 后端存储：`src-tauri/src/storage.rs`
