@@ -1,4 +1,4 @@
-import type { GbfrActDamageEventData, GbfrActRawEvent } from '../gbfr-act/events';
+import { GBFR_DPSCHECK_MANUAL_RESET_EVENT, type GbfrActDamageEventData, type GbfrActRawEvent } from '../gbfr-act/events';
 import type { CombatActorRef, CombatPartyMember } from './models';
 
 export type NormalizedCombatEvent =
@@ -6,6 +6,7 @@ export type NormalizedCombatEvent =
   | NormalizedLoadPartyEvent
   | NormalizedDamageEvent
   | NormalizedDeathEvent
+  | NormalizedManualResetEvent
   | NormalizedUnknownEvent;
 
 export interface NormalizedEnterAreaEvent {
@@ -29,6 +30,7 @@ export interface NormalizedDamageEvent {
   target: CombatActorRef;
   damage: number;
   actionId?: number;
+  rawActionId?: number;
   actionKey: string;
   flags?: number;
   raw: GbfrActRawEvent<GbfrActDamageEventData>;
@@ -39,6 +41,12 @@ export interface NormalizedDeathEvent {
   timeMs: number;
   actor: CombatActorRef;
   deathCount: number;
+  raw: GbfrActRawEvent;
+}
+
+export interface NormalizedManualResetEvent {
+  type: typeof GBFR_DPSCHECK_MANUAL_RESET_EVENT;
+  timeMs: number;
   raw: GbfrActRawEvent;
 }
 
@@ -61,6 +69,12 @@ export function normalizeGbfrActEvent(event: GbfrActRawEvent): NormalizedCombatE
       return normalizeDamageEvent(event as GbfrActRawEvent<GbfrActDamageEventData>, timeMs);
     case 'inc_death_cnt':
       return normalizeDeathEvent(event, timeMs);
+    case GBFR_DPSCHECK_MANUAL_RESET_EVENT:
+      return {
+        type: GBFR_DPSCHECK_MANUAL_RESET_EVENT,
+        timeMs,
+        raw: event,
+      };
     default:
       return {
         type: 'unknown',
@@ -128,9 +142,10 @@ function normalizeEnterAreaEvent(event: GbfrActRawEvent, timeMs: number): Normal
 }
 
 function normalizeLoadPartyEvent(event: GbfrActRawEvent, timeMs: number): NormalizedLoadPartyEvent {
-  const members = Array.isArray(event.data)
-    ? event.data.map((item, index) => normalizePartyMember(item, index)).filter((item): item is CombatPartyMember => Boolean(item))
-    : [];
+  const rawMembers = readLoadPartyMembers(event.data);
+  const members = rawMembers
+    .map((item, index) => normalizePartyMember(item, index))
+    .filter((item): item is CombatPartyMember => Boolean(item));
 
   return {
     type: 'load_party',
@@ -143,7 +158,9 @@ function normalizeLoadPartyEvent(event: GbfrActRawEvent, timeMs: number): Normal
 function normalizeDamageEvent(event: GbfrActRawEvent<GbfrActDamageEventData>, timeMs: number): NormalizedDamageEvent {
   const source = createActorRef(event.data?.source);
   const target = createActorRef(event.data?.target);
-  const actionId = typeof event.data?.action_id === 'number' ? event.data.action_id : undefined;
+  const rawActionId = typeof event.data?.action_id === 'number' ? event.data.action_id : undefined;
+  const flags = typeof event.data?.flags === 'number' ? event.data.flags : undefined;
+  const actionId = normalizeDamageActionId(rawActionId, flags);
 
   return {
     type: 'damage',
@@ -152,10 +169,34 @@ function normalizeDamageEvent(event: GbfrActRawEvent<GbfrActDamageEventData>, ti
     target,
     damage: typeof event.data?.damage === 'number' ? event.data.damage : 0,
     actionId,
+    rawActionId,
     actionKey: actionId === undefined ? 'unknown' : String(actionId),
-    flags: typeof event.data?.flags === 'number' ? event.data.flags : undefined,
+    flags,
     raw: event,
   };
+}
+
+function readLoadPartyMembers(data: unknown) {
+  if (Array.isArray(data)) {
+    return data;
+  }
+
+  if (data && typeof data === 'object' && !Array.isArray(data)) {
+    const item = data as Record<string, unknown>;
+    if (Array.isArray(item.members)) {
+      return item.members;
+    }
+  }
+
+  return [];
+}
+
+function normalizeDamageActionId(actionId: number | undefined, flags: number | undefined) {
+  if (flags !== undefined && (flags & 0x10) !== 0) {
+    return -0x100;
+  }
+
+  return actionId;
 }
 
 function normalizeDeathEvent(event: GbfrActRawEvent, timeMs: number): NormalizedDeathEvent {
@@ -181,10 +222,16 @@ function normalizePartyMember(raw: unknown, fallbackIndex: number): CombatPartyM
 
   if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
     const item = raw as Record<string, unknown>;
-    const actor = createActorRef(item.common_info);
+    const actor = createActorRef(item.common_info ?? item.actor ?? item.actor_info);
     const characterName = typeof item.c_name === 'string' ? item.c_name : undefined;
     const userName = typeof item.name === 'string' ? item.name : undefined;
     const displayName = characterName ?? userName ?? `队员 ${fallbackIndex + 1}`;
+    const partyIndex = typeof item.party_index === 'number' ? item.party_index : actor.partyIndex;
+    const isOnline = typeof item.is_online === 'boolean'
+      ? item.is_online
+      : typeof item.is_online === 'number'
+        ? item.is_online !== 0
+        : undefined;
 
     return {
       id: actor.id,
@@ -192,7 +239,8 @@ function normalizePartyMember(raw: unknown, fallbackIndex: number): CombatPartyM
       name: displayName,
       characterName,
       userName,
-      isOnline: typeof item.is_online === 'number' ? item.is_online !== 0 : undefined,
+      partyIndex,
+      isOnline,
       raw,
     };
   }

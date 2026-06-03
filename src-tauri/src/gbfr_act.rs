@@ -83,6 +83,34 @@ pub fn start_service(config: &AppConfig) -> Result<GbfrActServiceStatus, String>
     })
 }
 
+pub fn load_action_texts(config: &AppConfig) -> Result<Option<String>, String> {
+    load_asset_text(config, "act_ws_texts.js")
+}
+
+pub fn load_dump_texts(config: &AppConfig) -> Result<Option<String>, String> {
+    load_asset_text(config, "dump_texts.js")
+}
+
+fn load_asset_text(config: &AppConfig, file_name: &str) -> Result<Option<String>, String> {
+    let Some(act_ws_path) = &config.gbfr_act.act_ws_path else {
+        return Ok(None);
+    };
+
+    let act_ws_path = Path::new(act_ws_path);
+    let Some(project_dir) = act_ws_path.parent() else {
+        return Err(format!("无法获取 act_ws.py 所在目录：{}", act_ws_path.display()));
+    };
+
+    let asset_path = project_dir.join("assets").join(file_name);
+    if !asset_path.exists() {
+        return Ok(None);
+    }
+
+    std::fs::read_to_string(&asset_path)
+        .map(Some)
+        .map_err(|error| format!("读取 GBFR-ACT 文本资源失败 {}：{error}", asset_path.display()))
+}
+
 fn start_with_uac_script(uac_start_path: &Path) -> Result<(), String> {
     let Some(project_dir) = uac_start_path.parent() else {
         return Err(format!("无法获取 uac_start.cmd 所在目录：{}", uac_start_path.display()));

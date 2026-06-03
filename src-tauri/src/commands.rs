@@ -33,21 +33,24 @@ pub async fn start_gbfr_act_service(app: AppHandle) -> Result<GbfrActServiceStat
 }
 
 #[tauri::command]
+pub async fn load_gbfr_act_action_texts(app: AppHandle) -> Result<Option<String>, String> {
+    let config = crate::config::load_config(&app)?;
+    crate::gbfr_act::load_action_texts(&config)
+}
+
+#[tauri::command]
+pub async fn load_gbfr_act_dump_texts(app: AppHandle) -> Result<Option<String>, String> {
+    let config = crate::config::load_config(&app)?;
+    crate::gbfr_act::load_dump_texts(&config)
+}
+
+#[tauri::command]
 pub async fn save_raw_event(
     app: AppHandle,
     storage_state: State<'_, StorageState>,
     event: Value,
 ) -> Result<(), String> {
     crate::storage::save_raw_event(&app, &storage_state, event).await
-}
-
-#[tauri::command]
-pub async fn save_combat_summary(
-    app: AppHandle,
-    storage_state: State<'_, StorageState>,
-    summary: Value,
-) -> Result<(), String> {
-    crate::storage::save_summary(&app, &storage_state, summary).await
 }
 
 #[tauri::command]
@@ -64,4 +67,65 @@ pub async fn clear_raw_events(
     storage_state: State<'_, StorageState>,
 ) -> Result<(), String> {
     crate::storage::clear_raw_events(&app, &storage_state)
+}
+
+#[tauri::command]
+pub async fn load_loadout_tests(
+    app: AppHandle,
+    storage_state: State<'_, StorageState>,
+) -> Result<Vec<Value>, String> {
+    crate::storage::load_loadout_tests(&app, &storage_state)
+}
+
+#[tauri::command]
+pub async fn save_loadout_tests(
+    app: AppHandle,
+    storage_state: State<'_, StorageState>,
+    records: Vec<Value>,
+) -> Result<(), String> {
+    crate::storage::save_loadout_tests(&app, &storage_state, records)
+}
+
+#[tauri::command]
+pub async fn load_combat_history(
+    app: AppHandle,
+    storage_state: State<'_, StorageState>,
+) -> Result<Vec<Value>, String> {
+    crate::storage::load_combat_history(&app, &storage_state)
+}
+
+#[tauri::command]
+pub async fn save_combat_history_entry(
+    app: AppHandle,
+    storage_state: State<'_, StorageState>,
+    entry: Value,
+) -> Result<(), String> {
+    crate::storage::save_combat_history_entry(&app, &storage_state, entry)
+}
+
+#[tauri::command]
+pub async fn delete_combat_history_entry(
+    app: AppHandle,
+    storage_state: State<'_, StorageState>,
+    id: String,
+) -> Result<(), String> {
+    crate::storage::delete_combat_history_entry(&app, &storage_state, id)
+}
+
+#[tauri::command]
+pub async fn export_combat_history(
+    app: AppHandle,
+    storage_state: State<'_, StorageState>,
+    path: Option<String>,
+) -> Result<String, String> {
+    crate::storage::export_combat_history(&app, &storage_state, path)
+}
+
+#[tauri::command]
+pub async fn import_combat_history(
+    app: AppHandle,
+    storage_state: State<'_, StorageState>,
+    path: Option<String>,
+) -> Result<Vec<Value>, String> {
+    crate::storage::import_combat_history(&app, &storage_state, path)
 }

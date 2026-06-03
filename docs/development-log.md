@@ -1,521 +1,178 @@
-# 开发过程记录
+# 开发日志
 
-本文档用于交接给后续 Agent。目标是让新的开发者/Agent 不需要翻完整对话，也能理解项目为什么这样做、已经踩过哪些坑、当前代码跑到哪里。
+更新时间：2026-06-03
 
-## 1. 项目背景
+## 阶段概览
 
-用户想做一个《碧蓝幻想 Relink》的 DPS 监测插件/客户端。
+本项目从 Tauri + React 框架推进到可用的 GBFR-ACT 客户端基础版。当前已具备实时接入、回放调试、统计、Overlay、Dashboard、配装测试和历史记录管理能力。
 
-经过讨论后确定：
+## 已完成时间线
 
-- 不自研底层游戏采集层。
-- 不直接实现游戏进程注入、hook、反检测等逻辑。
-- 复用成熟项目 GBFR-ACT 的 WebSocket 事件流。
-- 本项目负责：事件消费、raw events 保存、统计计算、Overlay、Dashboard、配装测试和后续安装包。
+### 1. 项目框架
 
-参考数据源：<https://github.com/nyaoouo/GBFR-ACT>
+- Tauri 2
+- React 18
+- TypeScript
+- Vite
+- Rust 后端 commands/config/storage/gbfr_act 分层
+- 中文 UI 基础结构
 
-本地 GBFR-ACT 克隆位置：
+### 2. GBFR-ACT 接入
 
-```text
-D:\yzy\GBFR-ACT
-```
-
-本项目位置：
-
-```text
-D:\yzy\GBFR-DPScheck
-```
-
-GitHub 仓库：
-
-```text
-https://github.com/ncerno/GBFR-DPScheck
-```
-
-当前仓库是私有仓库。
-
-## 2. 用户已确认的需求
-
-### 2.1 项目形态
-
-- 新写客户端，消费 GBFR-ACT WebSocket，不 fork GBFR-ACT。
-- Tauri + TypeScript + Rust。
-- 透明置顶 Overlay。
-- 战后 Dashboard。
-- 中文 UI。
-- 后续公开发布 GitHub，并做安装包式社区工具。
-
-### 2.2 统计需求
-
-基础指标：
-
-- 队员名称 / 角色
-- 总伤害
-- 总 DPS
-- 最近 60 秒 DPS
-- rDPS
-- 战斗时长
-- 死亡次数
-- 伤害占比
-
-明确不要：
-
-- 基础指标里的命中次数。
-- 技能分析里的技能命中数展示。
-
-技能分析需要：
-
-- 技能 / 动作名称
-- 技能总伤害
-- 技能伤害占比
-- 单次最小伤害
-- 单次最大伤害
-- 单次平均伤害
-
-配装测试第一版需要：
-
-- 当前记录标记为配装测试。
-- 手动填写角色、武器、因子/备注。
-- 对比多次测试的 DPS、总伤害、战斗时长。
-- 保存测试历史。
-
-### 2.3 数据保存
-
-- 默认保留 raw events。
-- 暂不需要 CSV/JSON 导出按钮。
-- 如果面板显示不全，后续再做 HTML/Web 报告页。
-
-## 3. 关键架构决策
-
-### 3.1 采集层复用 GBFR-ACT
-
-GBFR-ACT 的 `act_ws.py` 会暴露 WebSocket，默认端口：
-
-```text
-24399
-```
-
-已确认事件类型：
-
-- `enter_area`
-- `load_party`
-- `damage`
-- `inc_death_cnt`
-
-伤害事件样例：
-
-```json
-{
-  "time_ms": 1780408315306,
-  "type": "damage",
-  "data": {
-    "source": ["Pl1200", 45, 726311188, 0],
-    "target": ["Em2700", 64, 2742660197, -1],
-    "action_id": 201,
-    "damage": 18848,
-    "flags": 131072
-  }
-}
-```
-
-`load_party` 会包含角色、武器、因子、Over Mastery 等数据。真实样本里确认有：
-
-- `c_name`: 角色名，例如夏洛特
-- `common_info`: actor 标识，例如 `["Pl1200",45,726311188,0]`
-- `weapon`
-- `sigils`
-- `over_mastery`
-
-### 3.2 前端直接连 WebSocket
-
-当前阶段前端直接连接：
-
-```text
-ws://127.0.0.1:24399
-```
-
-原因：
-
-- 调试简单。
-- GBFR-ACT 原版也是前端消费 WebSocket。
-- Overlay / Dashboard 可以直接共享前端 runtime 状态。
-
-后续如果要后台持续记录，可演进为 Rust 后端代理 WebSocket。
-
-### 3.3 统计逻辑独立于 UI
-
-统计相关代码集中在：
-
-```text
-src/combat/
-```
-
-当前文件：
-
-- `models.ts`：CombatRecord / ActorStats / ActionStats 等模型。
-- `normalizer.ts`：GBFR-ACT raw event 标准化。
-- `segmenter.ts`：战斗分段。
-- `statistics.ts`：伤害、DPS、动作统计。
-- `replay.ts`：从 raw events 回放得到 records。
-
-UI 不应直接重新计算统计，后续也应遵守这个原则。
-
-### 3.4 App 级 runtime
-
-当前应用级状态在：
-
-```text
-src/app/useAppRuntime.ts
-```
-
-它负责：
-
-- 加载配置。
-- 保存配置。
-- 检查 GBFR-ACT 服务。
+- 配置 WebSocket URL。
+- 检查 GBFR-ACT 端口。
 - 启动 GBFR-ACT。
-- 管理 WebSocket 事件流。
-- 保存 raw events。
-- 清空 raw events。
-- 加载本地 raw events。
-- 生成 `combatReplay`。
-
-Overlay、Dashboard、Settings 共用同一个 runtime。
-
-## 4. 已遇到的问题和修复
-
-### 4.1 Rust / Tauri 链接环境问题
-
-问题：初装 Rust 后 `cargo check` 报：
-
-```text
-link.exe failed
-```
-
-原因：bash 环境优先找到了 Git 自带的：
-
-```text
-D:\Git\usr\bin\link.exe
-```
-
-而不是 MSVC 的 `link.exe`。
-
-解决：通过 Visual Studio DevCmd 环境运行 Rust 命令。
-
-临时脚本写法：
-
-```cmd
-call "C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
-cargo check --manifest-path "D:\yzy\GBFR-DPScheck\src-tauri\Cargo.toml"
-```
-
-注意：普通 bash 直接跑 `cargo check` 可能仍然会拿到错误的 `link.exe`。
-
-### 4.2 Windows SDK 缺失
-
-问题：
-
-```text
-LINK : fatal error LNK1181: 无法打开输入文件“kernel32.lib”
-```
-
-原因：Visual Studio Build Tools 安装不完整，Windows SDK 缺 `Lib`。
-
-解决：用户安装/补齐 Visual Studio Build Tools 的 Windows SDK 后通过。
-
-### 4.3 Tauri 缺 icon.ico
-
-问题：
-
-```text
-icons/icon.ico not found
-```
-
-解决：生成临时占位图标：
-
-```text
-src-tauri/icons/icon.ico
-```
-
-后续发布前应替换成正式图标。
-
-### 4.4 GBFR-ACT 权限问题
-
-用户第一次直接启动 `act_ws.py` 后报：
-
-```text
-PermissionError: [WinError 5] 拒绝访问
-```
-
-原因：GBFR-ACT 注入游戏进程需要管理员权限。
-
-解决：本项目的 `start_service` 改为优先调用 GBFR-ACT 自带的：
-
-```text
-D:\yzy\GBFR-ACT\uac_start.cmd
-```
-
-相关代码：
-
-```text
-src-tauri/src/gbfr_act.rs
-```
-
-### 4.5 GBFR-ACT uac_start.cmd 脚本问题
-
-GBFR-ACT 原脚本在当前 Windows/cmd 环境下有问题：
-
-1. 把 Python 版本输出当命令执行，导致：
-
-```text
-Python: can't open file 'D:\yzy\GBFR-ACT\3.14.3'
-```
-
-2. 用 `./python-3.11.6-amd64.exe` 执行安装器，Windows cmd 不支持，导致：
-
-```text
-'.' 不是内部或外部命令
-```
-
-3. Python 路径双引号处理错误，导致：
-
-```text
-'""C:\Program' 不是内部或外部命令
-```
-
-已在本地修复：
-
-```text
-D:\yzy\GBFR-ACT\uac_start.cmd
-```
-
-注意：这个修复不在本项目仓库内，因为 GBFR-ACT 是单独克隆的外部项目。后续如果要做安装包，需要避免依赖这种本地补丁，或者在文档中明确用户需要 Python 3.11 并管理员运行。
-
-### 4.6 raw events 并发写入粘连
-
-旧版本出现过多个 JSON 对象写在同一行：
-
-```text
-{...}{...}
-```
-
-原因：Tauri 前端高频调用 `save_raw_event`，后端并发追加文件时写入交错。
-
-修复：
-
-- `src-tauri/src/storage.rs` 增加 `StorageState { write_lock: Mutex<()> }`。
-- `save_raw_event` / `save_summary` / `clear_raw_events` 使用同一把锁。
-
-同时 `load_raw_events` 不按行解析，而使用 serde_json 流式反序列化，兼容旧粘连文件。
-
-## 5. 已验证的数据链路
-
-已经实际验证：
-
-```text
-GBFR-ACT → WebSocket → 前端 Raw Event Viewer → 后端 raw-events.jsonl → 历史读取 → replay → Overlay/Dashboard
-```
-
-raw events 文件位置：
-
-```text
-C:\Users\59237\AppData\Roaming\dev.ncerno.gbfr-dpscheck\records\raw-events.jsonl
-```
-
-已采到真实木桩数据。示例角色：夏洛特。
-
-## 6. 当前已实现功能
-
-### 6.1 设置与调试页
-
-文件：
-
-```text
-src/features/settings/SettingsPage.tsx
-```
-
-已支持：
-
-- 配置 WebSocket 地址。
-- 配置 `act_ws.py` 路径。
-- 保存配置。
-- 检查 GBFR-ACT 服务。
-- 启动 GBFR-ACT。
-- 连接/断开 WebSocket。
-- 写入 Mock 事件。
-- 清空 Raw Events。
-- 加载本地 Raw Events。
-- 显示诊断信息。
-- Raw Event Viewer。
-- 统计预览。
-
-### 6.2 Overlay
-
-文件：
-
-```text
-src/features/overlay/OverlayPage.tsx
-```
-
-已支持基于实时/历史回放的最新 CombatRecord 展示：
-
-- 连接状态。
-- 战斗时间。
-- 总伤害。
-- 队员。
-- DPS。
-- 最近 60 秒 DPS。
-- rDPS 占位 `--`。
-- 伤害占比。
-
-### 6.3 Dashboard
-
-文件：
-
-```text
-src/features/dashboard/DashboardPage.tsx
-```
-
-已支持：
-
-- 战斗记录列表。
-- 切换战斗记录。
-- 总览：总伤害、团队 DPS、战斗时长、伤害事件数。
-- 队伍详情表。
-- 点击队员切换技能详情。
-- 技能详情表：总伤害、占比、最小、最大、平均。
-- 队伍/配装基础信息展示。
-
-### 6.4 历史回放
-
-后端命令：
-
-```text
-load_raw_events
-clear_raw_events
-save_raw_event
-```
-
-前端通过 `loadSavedRawEvents` 注入事件流，Overlay 和 Dashboard 会自动重算。
-
-## 7. 当前未完成 / 仍需注意
-
-### 7.1 rDPS 未实现
-
-当前模型有 `rdps` 字段，但显示为 `--` 或 `null`。
-
-原因：目前 GBFR-ACT 事件还没有确认足够的 buff/debuff/团队贡献归因数据，不能伪造。
-
-### 7.2 技能名称映射未实现
-
-当前技能名是：
-
-```text
-动作 <action_id>
-```
-
-需要后续接入 GBFR-ACT 的动作名映射或自建映射表。
-
-### 7.3 战斗分段仍是基础版
-
-当前分段：
-
-- `enter_area` 新建记录。
-- 无伤害超过配置秒数新建记录。
-- 默认按 training 策略回放。
-
-还没有完成木桩/任务/区域细分策略。
-
-### 7.4 配装测试页面未接入真实记录
-
-`LoadoutPage` 仍是占位。下一阶段建议优先做：
-
-- 从当前 CombatRecord 创建配装测试。
-- 保存备注。
-- 多轮对比。
-- 利用 `load_party` 原始 weapon/sigils/over_mastery 数据。
-
-### 7.5 GBFR-ACT 分发和 license 未确认
-
-本项目目前只是开发机本地克隆 GBFR-ACT。后续打包/公开发布前必须确认：
-
-- GBFR-ACT license。
-- 是否允许内置/再分发。
-- 是否需要用户自行下载。
-- 是否需要署名。
-
-## 8. 如何运行当前项目
-
-### 8.1 前端构建
+- 优先通过 GBFR-ACT `uac_start.cmd` 请求管理员权限。
+- 区分实时 `live` 和调试 `replay` 事件源。
+
+### 3. Raw Events
+
+- 后端写入 `records/raw-events.jsonl`。
+- `Mutex` 串行化写入，避免高频事件并发写入黏连。
+- 加载本地 raw events 时只注入前端回放，不重新持久化。
+- Raw Event Viewer 显示事件和解析错误。
+
+### 4. 事件标准化与统计
+
+- 标准化 `enter_area`、`load_party`、`damage`、`inc_death_cnt`。
+- 维护 actor ref、party member 和 raw actor。
+- 统计总伤害、DPS、最近 60 秒 DPS、占比、死亡次数。
+- 统计技能/动作伤害、最小/最大/平均值。
+- rDPS 保留为空，避免在缺少归因数据时误导用户。
+
+### 5. 分段策略
+
+- 支持 `auto`、`training`、`quest`、`generic`。
+- 支持通用空窗秒数和木桩独立空窗秒数。
+- 新增内部手动重置事件 `gbfr_dpscheck_manual_reset`。
+- 设置页新增分段策略配置和木桩多轮 Mock。
+- `src/combat/areaStrategy.ts` 集中维护区域识别关键词。
+
+### 6. Overlay
+
+- Overlay 内嵌页接入统计模型。
+- 独立 Tauri Overlay 窗口基础版完成。
+- 主窗口通过 `overlay:snapshot` 推送 runtime 快照。
+- 独立窗口不重复创建 WebSocket，不重复写 raw events。
+- 支持置顶、透明、无边框、跳过任务栏、鼠标穿透。
+- 支持窗口位置和尺寸保存。
+
+### 7. Dashboard
+
+- 接入实时/回放 CombatRecord。
+- 支持选择记录和选择角色。
+- 展示总览、队伍详情、技能详情、队伍/配装基础信息。
+- 新增 DPS 时间线、角色伤害柱、技能伤害柱。
+- 新增所选记录 raw events 折叠查看。
+
+### 8. 配装测试
+
+- 从当前 CombatRecord 保存配装测试。
+- 本地保存/读取/删除 `records/loadout-tests.json`。
+- 保存手动备注和 `load_party` 原始配装字段。
+- 解析 GBFR-ACT `assets/dump_texts.js`。
+- 展示配装摘要和 raw 调试信息。
+- 增加筛选、搜索、排序、同角色汇总和同角色多轮对比。
+
+### 9. 动作名映射
+
+- 读取 GBFR-ACT `assets/act_ws_texts.js`。
+- 安全解析 `game.actions` 对象，不执行外部 JS。
+- 统计层统一解析动作名。
+- fallback 保留 actor、action_id 和来源信息。
+
+### 10. 历史记录管理
+
+- 新增 `records/combat-history/<history-id>/record.json`。
+- 每条历史记录导出同目录 `raw-events.jsonl`。
+- Dashboard 支持保存当前记录为历史、加载历史、删除历史。
+- 新增筛选、排序、重命名。
+- 新增导出/导入 JSON 文件，默认路径为 `records/combat-history-export.json`。
+
+### 11. Rust 和构建环境
+
+- 已安装 Rust stable toolchain。
+- 已安装 Visual Studio Build Tools 2022 C++ 工具链。
+- Cargo 配置 `rsproxy.cn` sparse 镜像，解决 crates.io 下载超时。
+- Rust check 推荐在 VS 2022 DevCmd 中执行。
+
+### 12. 代码复盘清理
+
+- 修复 WebSocket 重连时旧 client 回调可能污染新连接状态的问题。
+- 拆分 `events` 展示缓冲和 `combatEvents` 完整统计源，避免长时间战斗统计被 2000 条上限截断。
+- 接入 `auto_start` 配置，加载配置后自动检查并尝试启动 GBFR-ACT。
+- `load_party` 标准化兼容数组式 payload 和 `data.members` payload。
+- Overlay 创建失败会向调用方返回错误；rDPS 在缺少可靠归因前统一显示 `--`。
+- 独立 Overlay 开启鼠标穿透后提示回主窗口关闭，避免小窗提供无法点击的恢复按钮。
+- 删除旧 Noop 存储适配器和未使用的战斗摘要保存命令。
+- 清理前端控制台日志和无引用样式。
+- 历史记录存储错误信息统一为中文，并处理无 raw events 保存时旧 jsonl 残留。
+- 历史导入/导出增加 `.json` 限制、文件大小限制、条数限制、schema 校验和安全 id 校验。
+- Tauri CSP 从 `null` 改为最小本地资源和本地 WebSocket 白名单。
+
+### 13. 交付打包与文档整理
+
+- 新增 `docs/release-package-2026-06-03.md`，记录源代码归档范围、排除项、验证命令、Git 交付分支和剩余实机验收项。
+- README、当前进度、技术计划和开发日志同步到同一交付状态。
+- 本地源代码归档路径：`D:\yzy\GBFR-DPScheck-source-2026-06-03.zip`。
+- 归档排除 `.git`、`node_modules`、`dist`、`src-tauri/target`、日志和本机环境文件。
+
+## 验证记录
+
+已通过：
 
 ```bash
-npm run build --prefix /d/yzy/GBFR-DPScheck
+npm run build
 ```
 
-### 8.2 Rust 检查
-
-推荐通过 Visual Studio DevCmd：
+已通过：
 
 ```cmd
-call "C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
-cargo check --manifest-path "D:\yzy\GBFR-DPScheck\src-tauri\Cargo.toml"
+call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
+cargo check --manifest-path "D:\yzy\GBFR-DPScheck\src-tauri\Cargo.toml" --offline
 ```
 
-### 8.3 启动 Tauri 开发版
+已通过：
+
+```bash
+git diff --check
+```
+
+已通过静态扫描：无调试日志、旧命令、未完成标记和 CSP 空配置残留。
+
+已通过：
 
 ```cmd
-call "C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
-cd /d D:\yzy\GBFR-DPScheck
-npm run tauri:dev
+npm run tauri:build
 ```
 
-### 8.4 无游戏验证
+生成安装包：
 
-1. 启动应用。
+```text
+src-tauri\target\release\bundle\msi\GBFR-DPScheck_0.1.0_x64_en-US.msi
+src-tauri\target\release\bundle\nsis\GBFR-DPScheck_0.1.0_x64-setup.exe
+```
+
+## 无游戏验证流程
+
+1. 运行 `npm run dev` 或 `npm run tauri:dev`。
 2. 打开设置页。
-3. 点击“加载本地 Raw Events”。
-4. 切到 Overlay / Dashboard 查看回放统计。
+3. 写入普通 Mock 或木桩多轮 Mock。
+4. 检查 Overlay、Dashboard 和配装测试。
+5. 在 Dashboard 保存历史记录。
+6. 验证历史筛选、排序、重命名、导出、导入和 raw events 展开。
 
-### 8.5 有游戏验证
+## 当前阻塞
 
-1. 启动游戏。
-2. 启动应用。
-3. 设置页点击“启动 GBFR-ACT”。
-4. UAC 弹窗同意管理员权限。
-5. GBFR-ACT 成功后点击“连接 WebSocket”。
-6. 打木桩/任务。
-7. 看 Raw Event Viewer、Overlay、Dashboard。
+本机当前不能启动游戏，因此以下仍需后续实机验证：
 
-## 9. 建议下一步
+- Overlay 独立窗口在真实游戏窗口上的置顶、透明和穿透。
+- 全屏独占模式下的可见性。
+- 真实任务区域名下 `auto` 策略的覆盖率。
+- 长时间实时 WebSocket 事件流下的稳定性。
 
-优先级建议：
+## 后续发布准备
 
-1. 配装测试页面接入真实 CombatRecord。
-2. 保存配装测试记录到本地。
-3. 多轮配装测试对比。
-4. 技能动作名映射。
-5. 区域策略/木桩策略细化。
-6. Dashboard 图表。
-7. Overlay 独立窗口和透明点击穿透优化。
-8. 安装包和公开发布准备。
-
-## 10. 交接注意事项
-
-- 不要把统计逻辑写进 UI，继续放在 `src/combat/`。
-- 不要伪造 rDPS。
-- 不要实现注入/绕过/反检测逻辑。
-- raw events 是核心资产，改统计逻辑时优先用历史回放验证。
-- 每轮开发后跑：
-
-```bash
-npm run build --prefix /d/yzy/GBFR-DPScheck
-```
-
-以及：
-
-```cmd
-cargo check --manifest-path "D:\yzy\GBFR-DPScheck\src-tauri\Cargo.toml"
-```
-
-- bash 环境直接跑 cargo 可能误用 Git 的 `link.exe`，推荐通过 DevCmd。
+- 在干净 Windows 环境测试安装和启动。
+- 准备 FAQ：管理员权限、端口占用、WebView2、全屏 Overlay 限制。
+- 准备授权说明和隐私说明。

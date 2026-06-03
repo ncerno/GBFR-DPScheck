@@ -1,92 +1,140 @@
 # GBFR-DPScheck
 
-《碧蓝幻想 Relink》DPS 监测客户端。
+GBFR-DPScheck 是一个基于 GBFR-ACT WebSocket 事件流的 Tauri 桌面客户端，用于《Granblue Fantasy: Relink》的实时 DPS Overlay、会话分析 Dashboard、配装测试和 raw events 调试回放。
 
-本项目基于 GBFR-ACT 的 WebSocket 事件流构建新的 Tauri 桌面客户端，目标是提供透明置顶 Overlay、战后分析 Dashboard、中文 UI、全队 DPS 统计和配装测试能力。
+项目只消费 GBFR-ACT 暴露的数据，不注入游戏进程，不实现 hook、绕过或反检测逻辑。
 
 ## 当前状态
 
-当前已经完成：
+已完成的主流程：
 
-- Tauri + React + TypeScript + Rust 项目框架
-- GBFR-ACT WebSocket 连接
-- GBFR-ACT 启动/检查基础逻辑
-- raw events 保存、清空、历史读取
-- 兼容旧日志中 JSON 对象粘连的历史读取
-- GBFR-ACT 事件标准化
-- 战斗分段基础版
-- 总伤害、DPS、最近 60 秒 DPS、伤害占比、死亡次数基础统计
-- 技能/动作伤害统计基础版
-- Overlay 接入实时/历史统计
-- Dashboard 战后分析基础版
-- Dashboard 点击角色切换技能详情
-- 设置页调试工具：Raw Event Viewer、统计预览、加载本地 Raw Events
+- GBFR-ACT WebSocket 连接、服务检查和启动入口。
+- 自动启动 GBFR-ACT 开关已生效：加载配置后检查端口，不可连接时再尝试启动。
+- raw events 实时保存、清空、本地加载和调试回放。
+- `enter_area`、`load_party`、`damage`、`inc_death_cnt` 标准化。
+- 战斗分段：`auto` / `training` / `quest` / `generic`。
+- 木桩独立空窗秒数、通用空窗秒数、手动重置当前记录。
+- 统计模型：总伤害、DPS、最近 60 秒 DPS、占比、死亡、技能伤害统计。
+- 动作名映射：读取 GBFR-ACT `assets/act_ws_texts.js`，缺失时 fallback。
+- 配装文本解析：读取 GBFR-ACT `assets/dump_texts.js`，展示武器、因子、词条等摘要。
+- Overlay：主窗口内展示和独立透明置顶小窗基础版，鼠标穿透可从主窗口关闭。
+- Dashboard：当前记录、历史记录、队伍详情、技能详情、图表和 raw events 查看。
+- 配装测试：保存、读取、删除、筛选、排序、同角色多轮对比。
+- 历史记录：按目录保存、重命名、筛选、排序、导入、导出。
+- 统计源与 Raw Event Viewer 展示缓冲已拆分，长时间战斗统计不依赖最近 2000 条展示缓冲。
 
-还未完成：
+仍需实机验收：
 
-- rDPS 真实算法
-- 技能动作名映射
-- 配装测试页面真实接入
-- Tauri 独立 Overlay 小窗 / 点击穿透
-- 按场次保存历史记录目录
-- 安装包和公开发布流程
+- 独立 Overlay 在真实游戏无边框窗口、全屏独占下的置顶、透明和鼠标穿透表现。
+- 实时游戏采集状态下的长时间稳定性和窗口兼容性。
 
-## 技术栈
+不做或暂不做：
 
-- Tauri 2
-- Rust
-- TypeScript
-- React
-- Vite
+- 不伪造 rDPS。缺少可靠归因数据时保持 `--`。
+- 不把本地 raw events 回放作为主要产品形态；它只用于无游戏时调试、复算和排错。
+- 不分发未授权的第三方代码。公开发布前需要确认 GBFR-ACT 相关授权。
 
-## 文档
+## 本机开发
 
-建议新 Agent 接手时按顺序阅读：
-
-1. [当前进度与交接清单](docs/current-progress.md)
-2. [开发过程记录](docs/development-log.md)
-3. [技术方案](docs/technical-plan.md)
-4. [Claude 项目说明](CLAUDE.md)
-
-## 运行方式
-
-### 前端构建
+安装依赖：
 
 ```bash
-npm run build --prefix /d/yzy/GBFR-DPScheck
+npm install
 ```
 
-### Rust 检查
+前端构建：
 
-需要通过 Visual Studio DevCmd，避免 bash 环境误用 Git 自带 `link.exe`：
-
-```cmd
-call "C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
-cargo check --manifest-path "D:\yzy\GBFR-DPScheck\src-tauri\Cargo.toml"
+```bash
+npm run build
 ```
 
-### 启动开发版
+Tauri/Rust 检查建议在 Visual Studio 2022 DevCmd 中执行：
 
 ```cmd
-call "C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
+call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
+cargo check --manifest-path "D:\yzy\GBFR-DPScheck\src-tauri\Cargo.toml" --offline
+```
+
+启动开发版：
+
+```cmd
+call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
 cd /d D:\yzy\GBFR-DPScheck
 npm run tauri:dev
 ```
 
+只看前端页面：
+
+```bash
+npm run dev
+```
+
+默认 Vite 地址：
+
+```text
+http://127.0.0.1:1420
+```
+
 ## 无游戏验证
 
-启动应用后：
+当前机器不能启动游戏时，可以用以下方式验证大部分功能：
 
-1. 打开“设置”页。
-2. 点击“加载本地 Raw Events”。
-3. 切到 Overlay / Dashboard 查看历史回放统计。
+1. 启动前端或 Tauri 开发版。
+2. 打开“设置与调试”。
+3. 点击“写入 Mock 回放”或“写入木桩多轮 Mock”。
+4. 切到 Overlay、Dashboard、配装测试检查统计和图表。
+5. 在 Dashboard 保存当前记录为历史记录，验证筛选、重命名、导出、导入和 raw events 展开。
 
-## 数据源
+## 数据文件
 
-本项目依赖 GBFR-ACT：
+默认应用数据目录由 Tauri `app_data_dir` 决定，Windows 上通常在：
 
-- 仓库：<https://github.com/nyaoouo/GBFR-ACT>
-- 本地开发路径：`D:\yzy\GBFR-ACT`
-- 默认 WebSocket：`ws://127.0.0.1:24399`
+```text
+%APPDATA%\dev.ncerno.gbfr-dpscheck
+```
 
-本项目不实现游戏进程注入逻辑，只消费 GBFR-ACT 的事件流。
+主要文件：
+
+```text
+config.json
+records/raw-events.jsonl
+records/loadout-tests.json
+records/combat-history/<history-id>/record.json
+records/combat-history/<history-id>/raw-events.jsonl
+records/combat-history-export.json
+```
+
+## 打包
+
+应用安装包打包命令：
+
+```cmd
+call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
+cd /d D:\yzy\GBFR-DPScheck
+npm run tauri:build
+```
+
+当前已验证可生成：
+
+```text
+src-tauri\target\release\bundle\msi\GBFR-DPScheck_0.1.0_x64_en-US.msi
+src-tauri\target\release\bundle\nsis\GBFR-DPScheck_0.1.0_x64-setup.exe
+```
+
+源代码和文档交付归档见：
+
+```text
+docs/release-package-2026-06-03.md
+```
+
+本地源代码归档：
+
+```text
+D:\yzy\GBFR-DPScheck-source-2026-06-03.zip
+```
+
+公开发布前需要补齐：
+
+- 干净 Windows 环境安装测试。
+- 管理员权限、端口占用、WebView2、Overlay 全屏限制等 FAQ。
+- 隐私说明：raw events 和历史记录可能包含用户名、系统路径等信息。

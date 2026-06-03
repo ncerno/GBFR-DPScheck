@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct AppConfig {
     pub gbfr_act: GbfrActConfig,
     pub overlay: OverlayConfig,
@@ -13,6 +14,7 @@ pub struct AppConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct GbfrActConfig {
     pub websocket_url: String,
     pub act_ws_path: Option<String>,
@@ -20,20 +22,29 @@ pub struct GbfrActConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct OverlayConfig {
     pub always_on_top: bool,
     pub opacity: f32,
     pub compact: bool,
+    pub click_through: bool,
+    pub window_x: Option<f64>,
+    pub window_y: Option<f64>,
+    pub window_width: f64,
+    pub window_height: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct CombatConfig {
     pub inactive_timeout_sec: u64,
+    pub training_inactive_timeout_sec: u64,
     pub keep_raw_events: bool,
     pub area_strategy: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct UiConfig {
     pub language: String,
     pub show_rdps: bool,
@@ -49,25 +60,55 @@ pub struct AppDiagnostics {
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
-            gbfr_act: GbfrActConfig {
-                websocket_url: "ws://127.0.0.1:24399".to_string(),
-                act_ws_path: Some("D:\\yzy\\GBFR-ACT\\act_ws.py".to_string()),
-                auto_start: true,
-            },
-            overlay: OverlayConfig {
-                always_on_top: true,
-                opacity: 0.86,
-                compact: false,
-            },
-            combat: CombatConfig {
-                inactive_timeout_sec: 30,
-                keep_raw_events: true,
-                area_strategy: "auto".to_string(),
-            },
-            ui: UiConfig {
-                language: "zh-CN".to_string(),
-                show_rdps: true,
-            },
+            gbfr_act: GbfrActConfig::default(),
+            overlay: OverlayConfig::default(),
+            combat: CombatConfig::default(),
+            ui: UiConfig::default(),
+        }
+    }
+}
+
+impl Default for GbfrActConfig {
+    fn default() -> Self {
+        Self {
+            websocket_url: "ws://127.0.0.1:24399".to_string(),
+            act_ws_path: Some("D:\\yzy\\GBFR-ACT\\act_ws.py".to_string()),
+            auto_start: true,
+        }
+    }
+}
+
+impl Default for OverlayConfig {
+    fn default() -> Self {
+        Self {
+            always_on_top: true,
+            opacity: 0.86,
+            compact: false,
+            click_through: false,
+            window_x: None,
+            window_y: None,
+            window_width: 760.0,
+            window_height: 520.0,
+        }
+    }
+}
+
+impl Default for CombatConfig {
+    fn default() -> Self {
+        Self {
+            inactive_timeout_sec: 30,
+            training_inactive_timeout_sec: 10,
+            keep_raw_events: true,
+            area_strategy: "auto".to_string(),
+        }
+    }
+}
+
+impl Default for UiConfig {
+    fn default() -> Self {
+        Self {
+            language: "zh-CN".to_string(),
+            show_rdps: true,
         }
     }
 }

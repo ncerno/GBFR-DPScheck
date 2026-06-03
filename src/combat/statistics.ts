@@ -1,10 +1,19 @@
 import type { GbfrActRawEvent } from '../gbfr-act/events';
 import type { CombatActionStats, CombatActorStats, CombatPartyMember, CombatRecord } from './models';
 import { normalizeGbfrActEvent } from './normalizer';
+import type { CombatActionNameMap, CombatActionNameSource } from './actionNames';
+import { resolveCombatActionName } from './actionNames';
+
+export interface CombatStatisticsOptions {
+  actionNameMap?: CombatActionNameMap;
+}
 
 interface MutableActionStats {
   id: string;
   name: string;
+  actionId?: number;
+  actorType?: string;
+  nameSource: CombatActionNameSource;
   totalDamage: number;
   minDamage: number;
   maxDamage: number;
@@ -24,7 +33,11 @@ interface MutableActorStats {
   damageEvents: Array<{ timeMs: number; damage: number }>;
 }
 
-export function applyCombatEvent(record: CombatRecord, event: GbfrActRawEvent): CombatRecord {
+export function applyCombatEvent(
+  record: CombatRecord,
+  event: GbfrActRawEvent,
+  options: CombatStatisticsOptions = {},
+): CombatRecord {
   const normalized = normalizeGbfrActEvent(event);
   const partyMembers = normalized.type === 'load_party' && normalized.members.length > 0
     ? normalized.members
@@ -45,7 +58,7 @@ export function applyCombatEvent(record: CombatRecord, event: GbfrActRawEvent): 
     actor.totalDamage += normalized.damage;
     actor.damageEvents.push({ timeMs: normalized.timeMs, damage: normalized.damage });
 
-    const action = ensureAction(actor, normalized.actionKey);
+    const action = ensureAction(actor, normalized, options);
     action.totalDamage += normalized.damage;
     action.damageEventCount += 1;
     action.minDamage = Math.min(action.minDamage, normalized.damage);
@@ -72,7 +85,7 @@ export function applyCombatEvent(record: CombatRecord, event: GbfrActRawEvent): 
   });
 }
 
-export function recalculateCombatRecord(record: CombatRecord): CombatRecord {
+export function recalculateCombatRecord(record: CombatRecord, options: CombatStatisticsOptions = {}): CombatRecord {
   const seed: CombatRecord = {
     ...record,
     startedAtMs: undefined,
@@ -87,7 +100,7 @@ export function recalculateCombatRecord(record: CombatRecord): CombatRecord {
   };
 
   return record.rawEvents.reduce<CombatRecord>(
-    (current, event) => applyCombatEvent(current, event),
+    (current, event) => applyCombatEvent(current, event, options),
     seed,
   );
 }
@@ -105,6 +118,9 @@ function createActorMap(actors: CombatActorStats[]): Map<string, MutableActorSta
     actions: new Map(actor.actions.map((action) => [action.id, {
       id: action.id,
       name: action.name,
+      actionId: action.actionId,
+      actorType: action.actorType,
+      nameSource: action.nameSource,
       totalDamage: action.totalDamage,
       minDamage: action.minDamage,
       maxDamage: action.maxDamage,
@@ -142,21 +158,34 @@ function ensureActor(
   return actor;
 }
 
-function ensureAction(actor: MutableActorStats, actionId: string): MutableActionStats {
-  const existing = actor.actions.get(actionId);
+function ensureAction(
+  actor: MutableActorStats,
+  normalized: Extract<ReturnType<typeof normalizeGbfrActEvent>, { type: 'damage' }>,
+  options: CombatStatisticsOptions,
+): MutableActionStats {
+  const existing = actor.actions.get(normalized.actionKey);
   if (existing) {
     return existing;
   }
 
+  const resolvedName = resolveCombatActionName({
+    actionKey: normalized.actionKey,
+    actorType: normalized.source.actorType,
+    actionNameMap: options.actionNameMap,
+  });
+
   const action: MutableActionStats = {
-    id: actionId,
-    name: actionId === 'unknown' ? '未知动作' : `动作 ${actionId}`,
+    id: normalized.actionKey,
+    name: resolvedName.name,
+    actionId: normalized.actionId,
+    actorType: normalized.source.actorType,
+    nameSource: resolvedName.source,
     totalDamage: 0,
     minDamage: Number.POSITIVE_INFINITY,
     maxDamage: 0,
     damageEventCount: 0,
   };
-  actor.actions.set(actionId, action);
+  actor.actions.set(normalized.actionKey, action);
   return action;
 }
 
@@ -209,6 +238,9 @@ function finalizeActions(actor: MutableActorStats, actorTotalDamage: number): Co
     .map((action) => ({
       id: action.id,
       name: action.name,
+      actionId: action.actionId,
+      actorType: action.actorType,
+      nameSource: action.nameSource,
       totalDamage: action.totalDamage,
       damageRate: actorTotalDamage > 0 ? action.totalDamage / actorTotalDamage : 0,
       minDamage: Number.isFinite(action.minDamage) ? action.minDamage : 0,

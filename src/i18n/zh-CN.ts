@@ -2,7 +2,7 @@ export const zhCN = {
   appName: 'GBFR-DPScheck',
   nav: {
     overlay: '实时 Overlay',
-    dashboard: '战后分析',
+    dashboard: '会话分析',
     loadout: '配装测试',
     settings: '设置',
   },

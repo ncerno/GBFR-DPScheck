@@ -1,14 +1,24 @@
 import type { GbfrActRawEvent } from '../../gbfr-act/events';
 import { replayCombatEvents } from '../../combat/replay';
+import type { CombatAreaStrategy } from '../../combat/models';
 
 interface CombatSummaryPanelProps {
   events: GbfrActRawEvent[];
+  inactiveTimeoutSec: number;
+  trainingInactiveTimeoutSec: number;
+  defaultStrategy: CombatAreaStrategy | string;
 }
 
-export function CombatSummaryPanel({ events }: CombatSummaryPanelProps) {
+export function CombatSummaryPanel({
+  events,
+  inactiveTimeoutSec,
+  trainingInactiveTimeoutSec,
+  defaultStrategy,
+}: CombatSummaryPanelProps) {
   const { records, latestRecord } = replayCombatEvents([...events].reverse(), {
-    inactiveTimeoutSec: 30,
-    defaultStrategy: 'training',
+    inactiveTimeoutSec,
+    trainingInactiveTimeoutSec,
+    defaultStrategy: defaultStrategy as CombatAreaStrategy,
   });
 
   return (
@@ -16,7 +26,7 @@ export function CombatSummaryPanel({ events }: CombatSummaryPanelProps) {
       <div className="section-title-row">
         <div>
           <h3>统计预览</h3>
-          <p>基于 Raw Event Viewer 当前事件实时回放，主要用于验证分段和基础统计。</p>
+          <p>基于当前完整事件流实时回放，主要用于验证分段和基础统计。</p>
         </div>
       </div>
 
@@ -24,6 +34,10 @@ export function CombatSummaryPanel({ events }: CombatSummaryPanelProps) {
         <article>
           <span>记录数</span>
           <strong>{records.length}</strong>
+        </article>
+        <article>
+          <span>当前策略</span>
+          <strong>{formatAreaStrategy(latestRecord?.strategy ?? defaultStrategy)}</strong>
         </article>
         <article>
           <span>总伤害</span>
@@ -69,6 +83,17 @@ export function CombatSummaryPanel({ events }: CombatSummaryPanelProps) {
       )}
     </section>
   );
+}
+
+function formatAreaStrategy(strategy: CombatAreaStrategy | string) {
+  const labels: Record<string, string> = {
+    auto: '自动',
+    training: '木桩',
+    quest: '任务',
+    generic: '通用',
+  };
+
+  return labels[strategy] ?? strategy;
 }
 
 function formatNumber(value: number) {

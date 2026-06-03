@@ -41,3 +41,55 @@ export const mockGbfrActEvents: GbfrActRawEvent[] = [
     },
   },
 ];
+
+export const mockTrainingMultiRoundEvents: GbfrActRawEvent[] = [
+  {
+    time_ms: now,
+    type: 'enter_area',
+    data: {
+      mock: true,
+      area_name: 'Debug 木桩区域',
+    },
+  },
+  {
+    time_ms: now + 100,
+    type: 'load_party',
+    data: [
+      ['player', 0, 1001, 0, '队员 A'],
+      ['player', 1, 1002, 1, '队员 B'],
+    ],
+  },
+  {
+    time_ms: now + 500,
+    type: 'damage',
+    data: {
+      source: ['player', 0, 1001, 0],
+      target: ['enemy', 0, 9001, -1],
+      action_id: 0x12345678,
+      damage: 100000,
+      flags: 0,
+    },
+  },
+  {
+    time_ms: now + 2_000,
+    type: 'damage',
+    data: {
+      source: ['player', 1, 1002, 1],
+      target: ['enemy', 0, 9001, -1],
+      action_id: 0x12345679,
+      damage: 50000,
+      flags: 0,
+    },
+  },
+  {
+    time_ms: now + 14_000,
+    type: 'damage',
+    data: {
+      source: ['player', 0, 1001, 0],
+      target: ['enemy', 0, 9001, -1],
+      action_id: 0x12345678,
+      damage: 130000,
+      flags: 0,
+    },
+  },
+];

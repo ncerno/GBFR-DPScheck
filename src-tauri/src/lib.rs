@@ -13,11 +13,19 @@ pub fn run() {
             commands::save_app_config,
             commands::check_gbfr_act_service,
             commands::start_gbfr_act_service,
+            commands::load_gbfr_act_action_texts,
+            commands::load_gbfr_act_dump_texts,
             commands::save_raw_event,
-            commands::save_combat_summary,
             commands::get_app_diagnostics,
             commands::load_raw_events,
             commands::clear_raw_events,
+            commands::load_loadout_tests,
+            commands::save_loadout_tests,
+            commands::load_combat_history,
+            commands::save_combat_history_entry,
+            commands::delete_combat_history_entry,
+            commands::export_combat_history,
+            commands::import_combat_history,
         ])
         .run(tauri::generate_context!())
         .expect("启动 GBFR-DPScheck 失败");

@@ -3,11 +3,19 @@ export type TauriCommandName =
   | 'save_app_config'
   | 'check_gbfr_act_service'
   | 'start_gbfr_act_service'
+  | 'load_gbfr_act_action_texts'
+  | 'load_gbfr_act_dump_texts'
   | 'save_raw_event'
-  | 'save_combat_summary'
   | 'load_raw_events'
   | 'clear_raw_events'
-  | 'get_app_diagnostics';
+  | 'get_app_diagnostics'
+  | 'load_loadout_tests'
+  | 'save_loadout_tests'
+  | 'load_combat_history'
+  | 'save_combat_history_entry'
+  | 'delete_combat_history_entry'
+  | 'export_combat_history'
+  | 'import_combat_history';
 
 export async function callTauriCommand<T>(command: TauriCommandName, args?: Record<string, unknown>): Promise<T> {
   if (!('__TAURI_INTERNALS__' in window)) {

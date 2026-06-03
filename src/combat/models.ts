@@ -1,4 +1,5 @@
 import type { GbfrActRawEvent } from '../gbfr-act/events';
+import type { CombatActionNameSource } from './actionNames';
 
 export type CombatAreaStrategy = 'auto' | 'training' | 'quest' | 'generic';
 
@@ -42,6 +43,9 @@ export interface CombatActorStats {
 export interface CombatActionStats {
   id: string;
   name: string;
+  actionId?: number;
+  actorType?: string;
+  nameSource: CombatActionNameSource;
   totalDamage: number;
   damageRate: number;
   minDamage: number;

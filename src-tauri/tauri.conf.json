@@ -12,22 +12,25 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "GBFR-DPScheck",
         "width": 980,
         "height": 720,
-        "transparent": true,
+        "transparent": false,
         "decorations": true,
-        "alwaysOnTop": true,
+        "alwaysOnTop": false,
         "resizable": true
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: http://asset.localhost data:; connect-src 'self' ws://127.0.0.1:* ws://localhost:* ws://[::1]:*"
     }
   },
   "bundle": {
     "active": true,
     "targets": "all",
-    "icon": []
+    "icon": [
+      "icons/icon.ico"
+    ]
   }
 }

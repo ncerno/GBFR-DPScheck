@@ -8,9 +8,15 @@ export interface AppConfig {
     always_on_top: boolean;
     opacity: number;
     compact: boolean;
+    click_through: boolean;
+    window_x?: number | null;
+    window_y?: number | null;
+    window_width: number;
+    window_height: number;
   };
   combat: {
     inactive_timeout_sec: number;
+    training_inactive_timeout_sec: number;
     keep_raw_events: boolean;
     area_strategy: 'auto' | 'training' | 'quest' | 'generic' | string;
   };
@@ -43,9 +49,15 @@ export const fallbackAppConfig: AppConfig = {
     always_on_top: true,
     opacity: 0.86,
     compact: false,
+    click_through: false,
+    window_x: null,
+    window_y: null,
+    window_width: 760,
+    window_height: 520,
   },
   combat: {
     inactive_timeout_sec: 30,
+    training_inactive_timeout_sec: 10,
     keep_raw_events: true,
     area_strategy: 'auto',
   },

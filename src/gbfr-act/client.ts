@@ -42,7 +42,6 @@ export class GbfrActClient {
       const parsed = JSON.parse(data) as GbfrActRawEvent;
       this.options.onEvent(parsed);
     } catch (error) {
-      console.warn('无法解析 GBFR-ACT 事件', error);
       this.options.onParseError?.(data, error);
     }
   }
