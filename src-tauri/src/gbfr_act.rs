@@ -1,7 +1,10 @@
 use std::net::TcpStream;
 use std::path::Path;
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::time::Duration;
+
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 
 use serde::{Deserialize, Serialize};
 
@@ -63,24 +66,49 @@ pub fn start_service(config: &AppConfig) -> Result<GbfrActServiceStatus, String>
         return Err(format!("无法获取 act_ws.py 所在目录：{}", act_ws_path.display()));
     };
 
-    let uac_start_path = project_dir.join("uac_start.cmd");
-    if uac_start_path.exists() {
-        start_with_uac_script(&uac_start_path)?;
-        return Ok(GbfrActServiceStatus {
-            running: false,
-            websocket_url: config.gbfr_act.websocket_url.clone(),
-            act_ws_path: config.gbfr_act.act_ws_path.clone(),
-            message: Some("已通过 uac_start.cmd 启动 GBFR-ACT。请在弹出的 UAC 窗口中同意管理员权限；脚本会自动寻找 Python 3.11 64-bit。".to_string()),
-        });
-    }
-
-    start_python_directly(act_ws_path, project_dir)?;
+    start_python_elevated_hidden(act_ws_path, project_dir)?;
     Ok(GbfrActServiceStatus {
         running: false,
         websocket_url: config.gbfr_act.websocket_url.clone(),
         act_ws_path: config.gbfr_act.act_ws_path.clone(),
-        message: Some("未找到 uac_start.cmd，已直接启动 act_ws.py。若出现 WinError 5，请改用管理员权限或补充 uac_start.cmd。".to_string()),
+        message: Some("已在后台请求管理员权限启动 GBFR-ACT。若弹出 UAC，请允许；启动成功后 WebSocket 会自动连接。".to_string()),
     })
+}
+
+pub fn normalize_act_ws_path(input: &str) -> Result<String, String> {
+    let trimmed = input.trim().trim_matches('"').trim_matches('\'');
+    if trimmed.is_empty() {
+        return Err("请填写 GBFR-ACT 的 act_ws.py 路径，或填写 GBFR-ACT 文件夹路径。".to_string());
+    }
+
+    let path = Path::new(trimmed);
+    if path.is_file() {
+        return if path.file_name().and_then(|name| name.to_str()) == Some("act_ws.py") {
+            Ok(path.to_string_lossy().to_string())
+        } else {
+            Err(format!("请选择 act_ws.py，而不是：{}", path.display()))
+        };
+    }
+
+    if path.is_dir() {
+        let act_ws_path = path.join("act_ws.py");
+        return if act_ws_path.exists() {
+            Ok(act_ws_path.to_string_lossy().to_string())
+        } else {
+            Err(format!("该文件夹下没有 act_ws.py：{}", path.display()))
+        };
+    }
+
+    Err(format!("路径不存在：{}", path.display()))
+}
+
+pub fn open_download_page() -> Result<(), String> {
+    background_command("explorer")
+        .arg("https://github.com/nyaoouo/GBFR-ACT")
+        .spawn()
+        .map_err(|error| format!("打开 GBFR-ACT 下载页失败：{error}"))?;
+
+    Ok(())
 }
 
 pub fn load_action_texts(config: &AppConfig) -> Result<Option<String>, String> {
@@ -111,28 +139,122 @@ fn load_asset_text(config: &AppConfig, file_name: &str) -> Result<Option<String>
         .map_err(|error| format!("读取 GBFR-ACT 文本资源失败 {}：{error}", asset_path.display()))
 }
 
-fn start_with_uac_script(uac_start_path: &Path) -> Result<(), String> {
-    let Some(project_dir) = uac_start_path.parent() else {
-        return Err(format!("无法获取 uac_start.cmd 所在目录：{}", uac_start_path.display()));
+fn start_python_elevated_hidden(act_ws_path: &Path, project_dir: &Path) -> Result<(), String> {
+    let Some(python) = find_python_311_64() else {
+        return Err("未找到 Python 3.11 64-bit。请先安装 Python 3.11 64-bit，或按 GBFR-ACT 说明运行一次 uac_start.cmd 完成 Python 安装。".to_string());
     };
 
-    Command::new("cmd")
-        .args(["/C", "start", "", &uac_start_path.display().to_string()])
+    let mut argument_items = python.args.clone();
+    argument_items.push(act_ws_path.to_string_lossy().to_string());
+    let argument_list = argument_items
+        .iter()
+        .map(|item| powershell_quote(item))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let script = format!(
+        "Start-Process -FilePath {} -ArgumentList @({}) -WorkingDirectory {} -Verb RunAs -WindowStyle Hidden",
+        powershell_quote(&python.program),
+        argument_list,
+        powershell_quote(&project_dir.to_string_lossy()),
+    );
+
+    background_command("powershell")
+        .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-Command", &script])
         .current_dir(project_dir)
         .spawn()
-        .map_err(|error| format!("启动 uac_start.cmd 失败：{error}"))?;
+        .map_err(|error| format!("后台启动 act_ws.py 失败：{error}"))?;
 
     Ok(())
 }
 
-fn start_python_directly(act_ws_path: &Path, project_dir: &Path) -> Result<(), String> {
-    Command::new("python")
-        .arg(act_ws_path)
-        .current_dir(project_dir)
-        .spawn()
-        .map_err(|error| format!("启动 act_ws.py 失败：{error}"))?;
+struct PythonLaunch {
+    program: String,
+    args: Vec<String>,
+}
 
-    Ok(())
+fn find_python_311_64() -> Option<PythonLaunch> {
+    for program in where_program("python") {
+        if python_version_matches(&program, &[]) {
+            return Some(PythonLaunch {
+                program,
+                args: Vec::new(),
+            });
+        }
+    }
+
+    if python_version_matches("py", &["-3.11-64"]) {
+        return Some(PythonLaunch {
+            program: "py".to_string(),
+            args: vec!["-3.11-64".to_string()],
+        });
+    }
+
+    None
+}
+
+fn where_program(program: &str) -> Vec<String> {
+    let Ok(output) = hidden_command("where")
+        .arg(program)
+        .stderr(Stdio::null())
+        .output()
+    else {
+        return Vec::new();
+    };
+
+    if !output.status.success() {
+        return Vec::new();
+    }
+
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(ToOwned::to_owned)
+        .collect()
+}
+
+fn python_version_matches(program: &str, args: &[&str]) -> bool {
+    let Ok(output) = hidden_command(program)
+        .args(args)
+        .arg("-VV")
+        .output()
+    else {
+        return false;
+    };
+
+    let version_text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+
+    version_text.contains("Python 3.11") && version_text.contains("64 bit")
+}
+
+fn powershell_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "''"))
+}
+
+fn background_command(program: &str) -> Command {
+    let mut command = hidden_command(program);
+    command
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+
+    command
+}
+
+fn hidden_command(program: &str) -> Command {
+    let mut command = Command::new(program);
+
+    #[cfg(windows)]
+    {
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+
+    command
 }
 
 fn can_connect_to_websocket_port(url: &str) -> bool {
@@ -153,9 +275,110 @@ fn websocket_url_to_address(url: &str) -> Option<String> {
         .unwrap_or(url);
     let host_port = without_scheme.split('/').next()?;
 
+    if host_port.starts_with('[') {
+        let bracket_end = host_port.find(']')?;
+        let host = &host_port[..=bracket_end];
+        let rest = &host_port[bracket_end + 1..];
+
+        return if rest.is_empty() {
+            Some(format!("{host}:80"))
+        } else {
+            rest.strip_prefix(':')
+                .filter(|port| !port.is_empty())
+                .map(|port| format!("{host}:{port}"))
+        };
+    }
+
+    if let Some((host, port)) = host_port.rsplit_once(':') {
+        if !host.is_empty() && !port.is_empty() && !host.contains(':') {
+            return Some(format!("{host}:{port}"));
+        }
+    }
+
     if host_port.contains(':') {
-        Some(host_port.to_string())
-    } else {
-        Some(format!("{host_port}:80"))
+        return Some(format!("[{host_port}]:80"));
+    }
+
+    Some(format!("{host_port}:80"))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use super::{normalize_act_ws_path, websocket_url_to_address};
+
+    #[test]
+    fn websocket_url_to_address_keeps_explicit_port() {
+        assert_eq!(
+            websocket_url_to_address("ws://127.0.0.1:24399"),
+            Some("127.0.0.1:24399".to_string())
+        );
+    }
+
+    #[test]
+    fn websocket_url_to_address_adds_default_port() {
+        assert_eq!(
+            websocket_url_to_address("ws://localhost/path"),
+            Some("localhost:80".to_string())
+        );
+    }
+
+    #[test]
+    fn websocket_url_to_address_handles_bracketed_ipv6_with_port() {
+        assert_eq!(
+            websocket_url_to_address("ws://[::1]:24399"),
+            Some("[::1]:24399".to_string())
+        );
+    }
+
+    #[test]
+    fn websocket_url_to_address_handles_bracketed_ipv6_without_port() {
+        assert_eq!(
+            websocket_url_to_address("ws://[::1]"),
+            Some("[::1]:80".to_string())
+        );
+    }
+
+    #[test]
+    fn normalize_act_ws_path_accepts_act_ws_file() {
+        let temp_dir = std::env::temp_dir().join(format!("gbfr-dpscheck-test-{}", std::process::id()));
+        fs::create_dir_all(&temp_dir).unwrap();
+        let act_ws_path = temp_dir.join("act_ws.py");
+        fs::write(&act_ws_path, "").unwrap();
+
+        assert_eq!(
+            normalize_act_ws_path(&act_ws_path.to_string_lossy()).unwrap(),
+            act_ws_path.to_string_lossy().to_string()
+        );
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn normalize_act_ws_path_accepts_project_directory() {
+        let temp_dir = std::env::temp_dir().join(format!("gbfr-dpscheck-test-dir-{}", std::process::id()));
+        fs::create_dir_all(&temp_dir).unwrap();
+        let act_ws_path = temp_dir.join("act_ws.py");
+        fs::write(&act_ws_path, "").unwrap();
+
+        assert_eq!(
+            normalize_act_ws_path(&temp_dir.to_string_lossy()).unwrap(),
+            act_ws_path.to_string_lossy().to_string()
+        );
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn normalize_act_ws_path_rejects_other_files() {
+        let temp_dir = std::env::temp_dir().join(format!("gbfr-dpscheck-test-bad-{}", std::process::id()));
+        fs::create_dir_all(&temp_dir).unwrap();
+        let other_path = temp_dir.join("README.md");
+        fs::write(&other_path, "").unwrap();
+
+        assert!(normalize_act_ws_path(&other_path.to_string_lossy()).is_err());
+
+        let _ = fs::remove_dir_all(&temp_dir);
     }
 }

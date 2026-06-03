@@ -3,6 +3,8 @@ export type TauriCommandName =
   | 'save_app_config'
   | 'check_gbfr_act_service'
   | 'start_gbfr_act_service'
+  | 'normalize_gbfr_act_path'
+  | 'open_gbfr_act_download_page'
   | 'load_gbfr_act_action_texts'
   | 'load_gbfr_act_dump_texts'
   | 'save_raw_event'

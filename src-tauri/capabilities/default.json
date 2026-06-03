@@ -1,0 +1,24 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Allow the main window and independent overlay window to use the Tauri APIs required for overlay creation, focus, drag, click-through and bounds persistence.",
+  "windows": [
+    "main",
+    "overlay"
+  ],
+  "permissions": [
+    "core:default",
+    "core:webview:allow-create-webview-window",
+    "core:webview:allow-set-webview-background-color",
+    "core:window:allow-create",
+    "core:window:allow-show",
+    "core:window:allow-close",
+    "core:window:allow-set-focus",
+    "core:window:allow-set-always-on-top",
+    "core:window:allow-set-ignore-cursor-events",
+    "core:window:allow-set-decorations",
+    "core:window:allow-set-skip-taskbar",
+    "core:window:allow-set-shadow",
+    "core:window:allow-start-dragging"
+  ]
+}

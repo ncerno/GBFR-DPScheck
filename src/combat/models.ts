@@ -2,6 +2,7 @@ import type { GbfrActRawEvent } from '../gbfr-act/events';
 import type { CombatActionNameSource } from './actionNames';
 
 export type CombatAreaStrategy = 'auto' | 'training' | 'quest' | 'generic';
+export type CombatActorNameSource = 'gbfr-act' | 'fallback';
 
 export interface CombatActorRef {
   id: string;
@@ -30,14 +31,14 @@ export interface CombatActorStats {
   userName?: string;
   partyIndex?: number;
   rawActor?: unknown;
-  damageEvents?: Array<{ timeMs: number; damage: number }>;
+  damageEvents?: Array<{ timeMs: number; damage: number; targetId?: string }>;
   totalDamage: number;
   dps: number;
-  rdps?: number | null;
   dpsInLastMinute: number;
   damageRate: number;
   deathCount: number;
   actions: CombatActionStats[];
+  targets: CombatTargetStats[];
 }
 
 export interface CombatActionStats {
@@ -51,6 +52,27 @@ export interface CombatActionStats {
   minDamage: number;
   maxDamage: number;
   averageDamage: number;
+  damageEventCount: number;
+  targetDamages?: Record<string, CombatActionTargetStats>;
+}
+
+export interface CombatActionTargetStats {
+  totalDamage: number;
+  minDamage: number;
+  maxDamage: number;
+  damageEventCount: number;
+}
+
+export interface CombatTargetStats {
+  id: string;
+  name: string;
+  actorType?: string;
+  rawActor?: unknown;
+  nameSource: CombatActorNameSource;
+  includedInDps: boolean;
+  exclusionReason?: string;
+  totalDamage: number;
+  damageRate: number;
   damageEventCount: number;
 }
 
@@ -66,6 +88,7 @@ export interface CombatRecord {
   eventCount: number;
   damageEventCount: number;
   actors: CombatActorStats[];
+  targets: CombatTargetStats[];
   partyMembers: CombatPartyMember[];
   rawEvents: GbfrActRawEvent[];
 }

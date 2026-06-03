@@ -1,9 +1,12 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { ConnectionBadge } from '../../components/ConnectionBadge';
+import { formatCombatRecordAreaName } from '../../combat/recordLabels';
 import type { OverlaySnapshot } from './overlaySnapshot';
 
 type OverlayViewVariant = 'embedded' | 'window';
 type LiveStateTone = 'active' | 'waiting' | 'idle' | 'replay' | 'error';
+const OVERLAY_HUD_BASE_WIDTH = 460;
+const OVERLAY_HUD_BASE_HEIGHT = 236;
 
 interface LiveState {
   label: string;
@@ -36,6 +39,8 @@ export function OverlayView({
   const teamDps = snapshot.record?.durationMs
     ? Math.floor(snapshot.record.totalDamage / Math.max(snapshot.record.durationMs / 1000, 1))
     : 0;
+  const recordAreaName = snapshot.record ? formatCombatRecordAreaName(snapshot.record) : '--';
+  const primaryTargetName = snapshot.record?.targets[0]?.name ?? '--';
   const liveState = getLiveState({
     source: snapshot.eventSource,
     connectionStatus: snapshot.connectionStatus,
@@ -53,23 +58,24 @@ export function OverlayView({
     '--overlay-opacity': String(snapshot.config.opacity),
   } as CSSProperties;
 
+  if (variant === 'window') {
+    return (
+      <OverlayWindowHud
+        snapshot={snapshot}
+        clickThrough={clickThrough}
+        onClose={onClose}
+        onStartDrag={onStartDrag}
+        onToggleClickThrough={onToggleClickThrough}
+        style={style}
+      />
+    );
+  }
+
   return (
     <div
       className={`overlay-layout overlay-layout--${variant}${snapshot.config.compact ? ' overlay-layout--compact' : ''}`}
       style={style}
     >
-      {variant === 'window' ? (
-        <div className="overlay-window-toolbar">
-          <button type="button" onMouseDown={() => onStartDrag?.()}>移动</button>
-          {clickThrough ? (
-            <span className="overlay-window-toolbar__hint">已穿透，请回主窗口关闭</span>
-          ) : (
-            <button type="button" onClick={() => onToggleClickThrough?.(true)}>开启穿透</button>
-          )}
-          <button type="button" onClick={onClose}>关闭</button>
-        </div>
-      ) : null}
-
       <section className={`overlay-live-state overlay-live-state--${liveState.tone}`}>
         <div>
           <span className="overlay-live-state__dot" />
@@ -87,8 +93,8 @@ export function OverlayView({
         </article>
         <article>
           <span>当前记录</span>
-          <strong>{snapshot.record?.areaName ?? snapshot.record?.id ?? '--'}</strong>
-          <small>{snapshot.record ? `${snapshot.record.damageEventCount} 条伤害事件` : '等待伤害事件'}</small>
+          <strong>{recordAreaName}</strong>
+          <small>{snapshot.record ? `${primaryTargetName} / ${snapshot.record.damageEventCount} 条伤害事件` : '等待伤害事件'}</small>
         </article>
         <article>
           <span>团队 DPS</span>
@@ -114,7 +120,7 @@ export function OverlayView({
         <div className="overlay-card__meta">
           <span>战斗时间：{formatDuration(snapshot.record?.durationMs ?? 0)}</span>
           <span>队员：{snapshot.record?.actorCount ?? 0}</span>
-          <span>rDPS：--</span>
+          <span>目标：{primaryTargetName}</span>
         </div>
         <div className="overlay-table-wrap">
           <table>
@@ -137,7 +143,7 @@ export function OverlayView({
               ) : topActors.map((actor, index) => (
                 <tr key={actor.id}>
                   <td>{index + 1}</td>
-                  <td>{actor.name}</td>
+                  <td>{formatActorDisplayName(actor)}</td>
                   <td>{formatNumber(actor.totalDamage)}</td>
                   <td>{formatNumber(actor.dps)}</td>
                   <td>{formatNumber(actor.dpsInLastMinute)}</td>
@@ -151,6 +157,127 @@ export function OverlayView({
       </section>
     </div>
   );
+}
+
+function OverlayWindowHud({
+  snapshot,
+  clickThrough,
+  onClose,
+  onStartDrag,
+  onToggleClickThrough,
+  style,
+}: {
+  snapshot: OverlaySnapshot;
+  clickThrough: boolean;
+  onClose?: () => void;
+  onStartDrag?: () => void;
+  onToggleClickThrough?: (enabled: boolean) => void;
+  style: CSSProperties;
+}) {
+  const topActors = (snapshot.record?.actors ?? []).slice(0, snapshot.config.compact ? 4 : 6);
+  const [hudRef, hudScale] = useOverlayHudScale(OVERLAY_HUD_BASE_WIDTH, OVERLAY_HUD_BASE_HEIGHT);
+  const teamDps = snapshot.record?.durationMs
+    ? Math.floor(snapshot.record.totalDamage / Math.max(snapshot.record.durationMs / 1000, 1))
+    : 0;
+  const hasDamage = (snapshot.record?.damageEventCount ?? 0) > 0;
+  const recordAreaName = snapshot.record ? formatCombatRecordAreaName(snapshot.record) : 'WAIT';
+  const primaryTargetName = snapshot.record?.targets[0]?.name ?? '--';
+  const frameStyle = {
+    ...style,
+    '--hud-scale': String(hudScale),
+  } as CSSProperties;
+
+  return (
+    <div className="overlay-window-hud" ref={hudRef}>
+      <div
+        className={`meter-window${snapshot.config.compact ? ' meter-window--compact' : ''}`}
+        style={frameStyle}
+      >
+        <header className="meter-window__header">
+          <div className="meter-window__title">
+            <strong>{formatCompactNumber(teamDps)}</strong>
+            <span>TEAM DPS</span>
+          </div>
+          <div className="meter-window__meta">
+            <span title={recordAreaName}>{hasDamage ? recordAreaName : 'WAIT'}</span>
+            <span title={primaryTargetName}>{primaryTargetName}</span>
+            <span>{formatDuration(snapshot.record?.durationMs ?? 0)}</span>
+          </div>
+          <div className="meter-window__toolbar">
+            <button type="button" onMouseDown={() => onStartDrag?.()} title="拖动窗口">移动</button>
+            {clickThrough ? (
+              <span>穿透中</span>
+            ) : (
+              <button type="button" onClick={() => onToggleClickThrough?.(true)} title="让鼠标点击穿过 Overlay">穿透</button>
+            )}
+            <button type="button" onClick={onClose} title="关闭 Overlay">关闭</button>
+          </div>
+        </header>
+
+        <section className="meter-window__list" aria-label="队伍 DPS 排名">
+          {topActors.length === 0 ? (
+            <p className="meter-window__empty">等待伤害事件</p>
+          ) : topActors.map((actor, index) => {
+            const displayName = formatActorDisplayName(actor);
+            const actorStyle = {
+              '--actor-color': getActorColor(actor.id, index),
+              '--actor-rate': `${Math.max(2, Math.min(100, actor.damageRate * 100))}%`,
+            } as CSSProperties;
+
+            return (
+              <article key={actor.id} className="meter-row" style={actorStyle}>
+                <span className="meter-row__rank">{index + 1}</span>
+                <div className="meter-row__body">
+                  <span className="meter-row__bar" />
+                  <div className="meter-row__name">
+                    <strong title={displayName}>{displayName}</strong>
+                    <span>{formatPercent(actor.damageRate)} · 60s {formatCompactNumber(actor.dpsInLastMinute)}</span>
+                  </div>
+                </div>
+                <div className="meter-row__damage">
+                  <strong>{formatCompactNumber(actor.dps)}</strong>
+                  <span>{formatCompactNumber(actor.totalDamage)}</span>
+                </div>
+              </article>
+            );
+          })}
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function useOverlayHudScale(baseWidth: number, baseHeight: number) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [scale, setScale] = useState(1);
+
+  useLayoutEffect(() => {
+    const element = ref.current;
+    if (!element) {
+      return undefined;
+    }
+
+    const updateScale = () => {
+      const rect = element.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) {
+        return;
+      }
+
+      setScale(Math.max(0.4, Math.min(rect.width / baseWidth, rect.height / baseHeight)));
+    };
+
+    updateScale();
+    const observer = new ResizeObserver(updateScale);
+    observer.observe(element);
+    window.addEventListener('resize', updateScale);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updateScale);
+    };
+  }, [baseHeight, baseWidth]);
+
+  return [ref, scale] as const;
 }
 
 function useNow(intervalMs = 1000) {
@@ -226,6 +353,42 @@ function getLiveState({
 
 function formatNumber(value: number) {
   return new Intl.NumberFormat('zh-CN').format(value);
+}
+
+function formatCompactNumber(value: number) {
+  return new Intl.NumberFormat('zh-CN', {
+    maximumFractionDigits: value >= 10_000 ? 1 : 0,
+    notation: value >= 10_000 ? 'compact' : 'standard',
+  }).format(value);
+}
+
+function getActorColor(actorId: string, index: number) {
+  const palette = [
+    '#78d6ff',
+    '#73e2a7',
+    '#ffd166',
+    '#ff9f7a',
+    '#c7a6ff',
+    '#ff7aa8',
+    '#8df0d2',
+    '#b9d878',
+  ];
+  let hash = index;
+  for (let charIndex = 0; charIndex < actorId.length; charIndex += 1) {
+    hash = (hash * 31 + actorId.charCodeAt(charIndex)) >>> 0;
+  }
+  return palette[hash % palette.length];
+}
+
+function formatActorDisplayName(actor: NonNullable<OverlaySnapshot['record']>['actors'][number]) {
+  const userName = actor.userName?.trim();
+  const characterName = actor.characterName?.trim();
+
+  if (userName && characterName && userName !== characterName) {
+    return `${userName}（${characterName}）`;
+  }
+
+  return userName || characterName || actor.name;
 }
 
 function formatPercent(value: number) {

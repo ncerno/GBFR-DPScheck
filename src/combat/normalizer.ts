@@ -1,6 +1,9 @@
 import { GBFR_DPSCHECK_MANUAL_RESET_EVENT, type GbfrActDamageEventData, type GbfrActRawEvent } from '../gbfr-act/events';
 import type { CombatActorRef, CombatPartyMember } from './models';
 
+const GBFR_ACT_BONUS_DAMAGE_FLAG = 1 << 15;
+const GBFR_ACT_BONUS_ACTION_ID = -3;
+
 export type NormalizedCombatEvent =
   | NormalizedEnterAreaEvent
   | NormalizedLoadPartyEvent
@@ -115,6 +118,34 @@ export function createActorRef(raw: unknown): CombatActorRef {
   };
 }
 
+export function isPlayerActorRef(actor: CombatActorRef) {
+  return typeof actor.actorType === 'string' && actor.actorType.toLowerCase().startsWith('pl');
+}
+
+export function resolveTrackedPartyMember(actor: CombatActorRef, partyMembers: CombatPartyMember[]) {
+  if (!isPlayerActorRef(actor)) {
+    return undefined;
+  }
+
+  return partyMembers.find((member) => (
+    member.id === actor.id
+    || isSamePlayerObject(member.actor, actor)
+    || isSamePartySlot(member.actor, actor)
+  ));
+}
+
+export function isTrackedPlayerDamageEvent(event: NormalizedDamageEvent, partyMembers: CombatPartyMember[]) {
+  if (event.damage <= 0 || !isPlayerActorRef(event.source)) {
+    return false;
+  }
+
+  return partyMembers.length === 0 || Boolean(resolveTrackedPartyMember(event.source, partyMembers));
+}
+
+export function resolveTrackedActorId(actor: CombatActorRef, partyMembers: CombatPartyMember[]) {
+  return resolveTrackedPartyMember(actor, partyMembers)?.id ?? actor.id;
+}
+
 export function actorRefKey(raw: unknown): string {
   if (Array.isArray(raw)) {
     return raw.slice(0, 4).map((item) => String(item)).join(':');
@@ -192,11 +223,29 @@ function readLoadPartyMembers(data: unknown) {
 }
 
 function normalizeDamageActionId(actionId: number | undefined, flags: number | undefined) {
-  if (flags !== undefined && (flags & 0x10) !== 0) {
-    return -0x100;
+  if (flags !== undefined && (flags & GBFR_ACT_BONUS_DAMAGE_FLAG) !== 0) {
+    return GBFR_ACT_BONUS_ACTION_ID;
   }
 
   return actionId;
+}
+
+function isSamePlayerObject(left: CombatActorRef, right: CombatActorRef) {
+  return Boolean(
+    left.actorType
+      && right.actorType
+      && left.actorType === right.actorType
+      && typeof left.objectId === 'number'
+      && left.objectId === right.objectId,
+  );
+}
+
+function isSamePartySlot(left: CombatActorRef, right: CombatActorRef) {
+  return Boolean(
+    typeof left.partyIndex === 'number'
+      && left.partyIndex >= 0
+      && left.partyIndex === right.partyIndex,
+  );
 }
 
 function normalizeDeathEvent(event: GbfrActRawEvent, timeMs: number): NormalizedDeathEvent {

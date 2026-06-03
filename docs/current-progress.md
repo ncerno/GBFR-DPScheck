@@ -1,10 +1,10 @@
 # 当前进度与交接清单
 
-更新时间：2026-06-03
+更新时间：2026-06-04
 
 ## 一句话状态
 
-项目已经完成 GBFR-ACT WebSocket 消费、raw events 保存/回放、战斗分段、统计模型、Overlay、Dashboard、配装测试、动作名/配装文本解析、历史记录管理和无游戏 Mock 验证链路。当前剩余的主要工作不是编码，而是游戏实机 Overlay 验收、安装包实测和公开发布前的授权/隐私/FAQ 准备。
+项目已经完成 GBFR-ACT WebSocket 消费、raw events 保存/回放、战斗分段、统计模型、Overlay、Dashboard、配装测试、动作名/配装文本解析、历史记录管理、首页首次使用向导和无游戏 Mock 验证链路。Overlay 实机基础验收已基本通过，公开发布前材料已补齐；当前没有已知代码阻塞项，剩余重点是干净 Windows 安装验收和长时间实机稳定性观察。
 
 ## 已完成
 
@@ -18,23 +18,28 @@
 - `auto_start` 配置已接入启动流程，Tauri 环境加载配置后会检查并尝试启动 GBFR-ACT。
 - 独立 Overlay 创建失败现在会返回到调用方，不再误报“已打开”。
 - 独立 Overlay 开启鼠标穿透后提示回主窗口关闭，避免展示不可操作的“取消穿透”按钮。
-- Overlay 的 rDPS 显示保持 `--`，不展示未可靠实现的数据。
 - 历史记录存储错误信息统一为中文，并清理重复保存时可能残留的旧 `raw-events.jsonl`。
 - 历史导入/导出增加 `.json` 限制、导入大小限制、导入数量限制、schema 校验和安全 id 校验。
 - Tauri CSP 从 `null` 改为最小本地资源和本地 WebSocket 白名单。
+- 独立 Overlay 队员名显示为 `玩家名（角色名）`，缺失玩家名或角色名时自动回退到现有名称。
+- 补充发布前 FAQ、隐私说明、第三方署名/授权说明和干净 Windows 验收清单。
+- 新增首页首次使用向导：打开 GBFR-ACT 下载页、填写 `act_ws.py` 或 GBFR-ACT 文件夹、保存并启动、连接 WebSocket、打开 Overlay 小窗。
+- 设置页已精简，Mock、Raw Events、诊断信息和回放工具默认收进“高级调试”。
+- README 已改为面向普通用户的说明，开发和验收信息移入 docs。
 
 ### GBFR-ACT 接入
 
 - 配置 WebSocket URL，默认 `ws://127.0.0.1:24399`。
 - 检查 GBFR-ACT WebSocket 端口。
-- 启动 GBFR-ACT，优先通过 `uac_start.cmd` 请求管理员权限。
+- 后台启动 GBFR-ACT：查找 Python 3.11 64-bit 后隐藏控制台启动 `act_ws.py`，并通过 UAC 请求管理员权限。
 - 实时事件区分 `live` 和 `replay` 来源。
 - 记录事件计数、缓冲事件数、事件类型计数、最后事件时间和最后伤害时间。
 - 自动启动开关生效：加载配置后会先检查端口，不可连接时再尝试启动 GBFR-ACT。
 
 ### Raw Events
 
-- 实时 raw events 持久化到 `records/raw-events.jsonl`。
+- Raw Events 默认不自动持久化，避免长时间运行产生过多日志。
+- 设置页可手动开启实时采集到 `records/raw-events.jsonl`，也可手动追加保存当前内存事件样本。
 - 支持清空 raw events。
 - 支持加载本地 raw events 做调试回放，不重新写回日志。
 - Raw Event Viewer 只展示最近缓冲事件，统计链路使用完整 `combatEvents`。
@@ -62,16 +67,23 @@ src/combat/
 - 最近 60 秒 DPS
 - 伤害占比
 - 死亡次数
+- 只统计队伍玩家源的正伤害，敌方/场地来源保留在 raw events 中但不进入团队 DPS。
+- 同一队员的临时 actor / 分身如果 actorType 和 objectId 匹配，会归并回队伍成员。
 - 技能/动作伤害统计
 - 最小、最大、平均伤害
-- rDPS 保留占位，当前显示 `--`
+- 已移除团队增伤归因字段和界面组件；当前只展示可从 GBFR-ACT 日志可靠计算的 DPS。
+- 目标统计保留全部目标承伤；团队/个人 DPS 只统计主目标。
+- 主目标过滤会排除投射物、场地、水晶、武器部件，以及低于主目标伤害阈值的次要目标/小怪。
+- 实机 raw events 复查确认：路西法战中 `Em7700` 本体计入 DPS，`We7700` 完全否认之剑和 `Em7700Trial8_11Crystal` 等机制目标排除。
 
 ### 分段策略
 
 - 配置项：`auto` / `training` / `quest` / `generic`。
 - `auto` 通过 `src/combat/areaStrategy.ts` 的关键词表识别训练、木桩、任务、Boss 等区域。
+- `auto` 遇到未知或缺失区域名时按 `quest` 处理，避免真实任务因停手时间或过场动画被误切段。
 - `training` 使用独立空窗秒数，默认 10 秒。
-- 其他策略使用通用空窗秒数，默认 30 秒。
+- 只有 `training` 使用无伤害空窗切分多轮木桩测试；`quest` / `generic` 不再按无伤害空窗切地图。
+- 真实 GBFR-ACT `enter_area` 当前通常不携带 `area_name` / `area_id`，因此可准确识别区域切换事件，但不能从现有日志恢复真实地图名称。
 - 设置页支持调整策略和空窗秒数。
 - 设置页支持手动重置当前记录。
 
@@ -93,15 +105,18 @@ src/app/useOverlayWindowBridge.ts
 - 主窗口内 Overlay 和独立 Overlay 共享同一个展示组件。
 - 独立窗口通过 Tauri event 接收主窗口 runtime 快照，不重复建立 WebSocket。
 - 独立窗口透明、置顶、无边框、跳过任务栏。
+- 独立窗口使用紧凑 damage meter 风格，固定逻辑画布整体缩放，避免窗口缩小时内部控件被挤没。
+- 独立窗口已强制 overlay 模式下 `html/body/#root` 透明，避免 WebView 根背景遮住窗口透明效果。
+- HUD 背景半透明，伤害色块使用高对比暗底和高不透明度色条。
+- 队员名在可用时显示 `玩家名（角色名）`，方便识别玩家和操控角色。
 - 鼠标穿透开关。
 - 位置和尺寸保存到配置。
 - 透明度、紧凑模式、宽高配置。
 
-仍需实机验收：
+实机验收状态：
 
-- 无边框窗口模式下置顶表现。
-- 全屏独占模式下是否可见。
-- 鼠标穿透在真实游戏窗口上的表现。
+- 无边框、透明、鼠标穿透和全屏基础表现已由实机测试基本确认。
+- 仍建议在干净 Windows 环境和长时间运行场景中复测窗口稳定性。
 
 ### Dashboard
 
@@ -211,11 +226,11 @@ Cargo 用户镜像：
 C:\Users\great\.cargo\config.toml
 ```
 
-## 当前不能完成的验收
+## 当前仍需验收
 
-本机当前不能启动游戏，因此以下只能保留为待验收：
+以下项目仍建议继续验证：
 
-- 真实游戏状态下的 Overlay 置顶、透明和鼠标穿透。
+- 干净 Windows 环境安装、启动、WebView2 缺失处理和卸载残留。
 - 长时间实时采集后的窗口稳定性。
 - 真实任务、多人联机、不同区域名的分段准确性。
 
@@ -232,9 +247,10 @@ C:\Users\great\.cargo\config.toml
 ## 公开发布前清单
 
 - 在干净 Windows 环境安装运行。
-- 明确 GBFR-ACT 相关授权和署名。
-- 写明 raw events / 历史记录可能包含用户名、路径等隐私信息。
-- 补充 FAQ：管理员权限、端口占用、WebView2、全屏独占 Overlay 限制。
+- 按 `docs/clean-windows-test.md` 完成安装和卸载验收。
+- 发布页引用 `docs/user-quick-start.md`、`docs/faq.md`、`docs/privacy.md` 和 `docs/third-party-notices.md`。
+- 发布状态见 `docs/release-status.md`。
+- 继续收集长时间实机运行日志，复查目标过滤和分段边界。
 
 当前本机已生成安装包：
 

@@ -22,6 +22,7 @@ export function SettingsPage({ runtime }: SettingsPageProps) {
     updateOverlayConfig,
     updateCombatConfig,
     resetCurrentCombatRecord,
+    saveCurrentRawEvents,
     saveConfig,
     checkService,
     startService,
@@ -46,8 +47,8 @@ export function SettingsPage({ runtime }: SettingsPageProps) {
 
   return (
     <PlaceholderPanel
-      title="设置与调试"
-      description="配置 GBFR-ACT WebSocket。Raw Events 与 Mock 数据只用于开发回放，实时分析以 WebSocket 推送为主。"
+      title="设置"
+      description="日常使用只需要配置 GBFR-ACT 路径、确认 WebSocket 连接并按需调整 Overlay。调试工具已收起到高级区域。"
     >
       <div className="settings-grid">
         <section className="settings-card">
@@ -75,6 +76,14 @@ export function SettingsPage({ runtime }: SettingsPageProps) {
             />
             自动启动 GBFR-ACT
           </label>
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={config.gbfr_act.auto_connect !== false}
+              onChange={(event) => updateGbfrActConfig('auto_connect', event.target.checked)}
+            />
+            启动后自动连接 WebSocket
+          </label>
           <div className="button-row">
             <button type="button" onClick={() => void saveConfig()}>保存配置</button>
             <button type="button" onClick={() => void checkService()}>检查服务</button>
@@ -91,6 +100,14 @@ export function SettingsPage({ runtime }: SettingsPageProps) {
               onChange={(event) => updateOverlayConfig('always_on_top', event.target.checked)}
             />
             窗口置顶
+          </label>
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={config.overlay.auto_open !== false}
+              onChange={(event) => updateOverlayConfig('auto_open', event.target.checked)}
+            />
+            启动后自动打开独立 Overlay
           </label>
           <label className="checkbox-label">
             <input
@@ -124,7 +141,7 @@ export function SettingsPage({ runtime }: SettingsPageProps) {
               宽度
               <input
                 type="number"
-                min="520"
+                min="320"
                 value={config.overlay.window_width}
                 onChange={(event) => updateOverlayConfig('window_width', Number(event.target.value))}
               />
@@ -133,7 +150,7 @@ export function SettingsPage({ runtime }: SettingsPageProps) {
               高度
               <input
                 type="number"
-                min="280"
+                min="180"
                 value={config.overlay.window_height}
                 onChange={(event) => updateOverlayConfig('window_height', Number(event.target.value))}
               />
@@ -186,7 +203,7 @@ export function SettingsPage({ runtime }: SettingsPageProps) {
               checked={config.combat.keep_raw_events}
               onChange={(event) => updateCombatConfig('keep_raw_events', event.target.checked)}
             />
-            保存实时 Raw Events
+            调试时采集实时 Raw Events 到本地文件
           </label>
           <div className="button-row">
             <button type="button" onClick={() => void saveConfig()}>保存分段配置</button>
@@ -233,8 +250,21 @@ export function SettingsPage({ runtime }: SettingsPageProps) {
           <div className="button-row">
             <button type="button" onClick={stream.connect}>连接 WebSocket</button>
             <button type="button" onClick={stream.disconnect}>断开</button>
+            <button type="button" onClick={() => void checkService()}>检查服务</button>
+          </div>
+        </section>
+      </div>
+
+      {operationMessage ? <p className="operation-message">{operationMessage}</p> : null}
+
+      <details className="advanced-debug">
+        <summary>高级调试</summary>
+        <section className="settings-card">
+          <h3>调试操作</h3>
+          <div className="button-row">
             <button type="button" onClick={() => void pushMockEvents()}>写入 Mock 回放</button>
             <button type="button" onClick={() => void pushTrainingMultiRoundMockEvents()}>写入木桩多轮 Mock</button>
+            <button type="button" onClick={() => void saveCurrentRawEvents()}>手动保存当前 Raw Events</button>
             <button type="button" onClick={() => void loadSavedRawEvents()}>加载本地 Raw Events</button>
             <button type="button" onClick={resetCurrentCombatRecord}>手动重置记录</button>
             <button type="button" onClick={() => void clearSavedRawEvents()}>清空 Raw Events</button>
@@ -242,37 +272,35 @@ export function SettingsPage({ runtime }: SettingsPageProps) {
             <button type="button" onClick={() => void reloadLoadoutTextMap()}>重新加载配装文本</button>
           </div>
         </section>
-      </div>
 
-      {operationMessage ? <p className="operation-message">{operationMessage}</p> : null}
+        {diagnostics ? (
+          <section className="settings-card diagnostics-card">
+            <h3>诊断信息</h3>
+            <dl className="settings-list compact">
+              <div>
+                <dt>数据目录</dt>
+                <dd>{diagnostics.app_data_dir}</dd>
+              </div>
+              <div>
+                <dt>配置文件</dt>
+                <dd>{diagnostics.config_path}</dd>
+              </div>
+              <div>
+                <dt>Raw Events</dt>
+                <dd>{diagnostics.raw_events_path}</dd>
+              </div>
+            </dl>
+          </section>
+        ) : null}
 
-      {diagnostics ? (
-        <section className="settings-card diagnostics-card">
-          <h3>诊断信息</h3>
-          <dl className="settings-list compact">
-            <div>
-              <dt>数据目录</dt>
-              <dd>{diagnostics.app_data_dir}</dd>
-            </div>
-            <div>
-              <dt>配置文件</dt>
-              <dd>{diagnostics.config_path}</dd>
-            </div>
-            <div>
-              <dt>Raw Events</dt>
-              <dd>{diagnostics.raw_events_path}</dd>
-            </div>
-          </dl>
-        </section>
-      ) : null}
-
-      <CombatSummaryPanel
-        events={stream.combatEvents}
-        inactiveTimeoutSec={config.combat.inactive_timeout_sec}
-        trainingInactiveTimeoutSec={config.combat.training_inactive_timeout_sec}
-        defaultStrategy={config.combat.area_strategy}
-      />
-      <RawEventViewer events={stream.events} parseErrors={stream.parseErrors} onClear={stream.clearEvents} />
+        <CombatSummaryPanel
+          events={stream.combatEvents}
+          inactiveTimeoutSec={config.combat.inactive_timeout_sec}
+          trainingInactiveTimeoutSec={config.combat.training_inactive_timeout_sec}
+          defaultStrategy={config.combat.area_strategy}
+        />
+        <RawEventViewer events={stream.events} parseErrors={stream.parseErrors} onClear={stream.clearEvents} />
+      </details>
     </PlaceholderPanel>
   );
 }

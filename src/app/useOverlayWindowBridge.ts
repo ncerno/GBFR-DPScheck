@@ -55,6 +55,6 @@ async function publishOverlaySnapshot(snapshot: OverlaySnapshot) {
     const { emitTo } = await import('@tauri-apps/api/event');
     await emitTo(OVERLAY_WINDOW_LABEL, OVERLAY_SNAPSHOT_EVENT, snapshot);
   } catch {
-    // The independent overlay window is optional and may not exist yet.
+    return;
   }
 }

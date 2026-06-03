@@ -110,17 +110,23 @@ if (flags & (1 << 15)) return -3
 
 对 `ws://[::1]:24399` 会错误解析。当前默认地址是 `ws://127.0.0.1:24399`，实际影响很小。
 
+处理状态：已修复，并补充 IPv6 地址解析单元测试。
+
 ## 问题 6（低风险）：导入/导出手动输入路径
 
 位置：[src/features/dashboard/DashboardPage.tsx](D:/yzy/GBFR-DPScheck/src/features/dashboard/DashboardPage.tsx)
 
 历史导入/导出仍使用手动输入路径，建议后续改用 Tauri 文件选择器。
 
+处理状态：保留为后续增强，不阻塞当前发布。
+
 ## 问题 7（低风险）：uac_start.cmd 启动可能弹两个 cmd 窗口
 
 位置：[src-tauri/src/gbfr_act.rs](D:/yzy/GBFR-DPScheck/src-tauri/src/gbfr_act.rs)
 
 `cmd /C start "" xxx.cmd` 本身弹一个窗口，然后 uac_start.cmd 内部 UAC 提升又弹一个。不算 bug，但用户体验可以优化。
+
+处理状态：已修复。当前不再调用 `uac_start.cmd`，改为后台隐藏控制台启动 `act_ws.py`，仅保留必要的 UAC 授权弹窗。
 
 ## 整体评价
 

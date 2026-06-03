@@ -19,12 +19,14 @@ pub struct GbfrActConfig {
     pub websocket_url: String,
     pub act_ws_path: Option<String>,
     pub auto_start: bool,
+    pub auto_connect: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct OverlayConfig {
     pub always_on_top: bool,
+    pub auto_open: bool,
     pub opacity: f32,
     pub compact: bool,
     pub click_through: bool,
@@ -47,7 +49,6 @@ pub struct CombatConfig {
 #[serde(default)]
 pub struct UiConfig {
     pub language: String,
-    pub show_rdps: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -74,6 +75,7 @@ impl Default for GbfrActConfig {
             websocket_url: "ws://127.0.0.1:24399".to_string(),
             act_ws_path: Some("D:\\yzy\\GBFR-ACT\\act_ws.py".to_string()),
             auto_start: true,
+            auto_connect: true,
         }
     }
 }
@@ -82,13 +84,14 @@ impl Default for OverlayConfig {
     fn default() -> Self {
         Self {
             always_on_top: true,
+            auto_open: true,
             opacity: 0.86,
             compact: false,
             click_through: false,
             window_x: None,
             window_y: None,
-            window_width: 760.0,
-            window_height: 520.0,
+            window_width: 420.0,
+            window_height: 260.0,
         }
     }
 }
@@ -98,7 +101,7 @@ impl Default for CombatConfig {
         Self {
             inactive_timeout_sec: 30,
             training_inactive_timeout_sec: 10,
-            keep_raw_events: true,
+            keep_raw_events: false,
             area_strategy: "auto".to_string(),
         }
     }
@@ -108,7 +111,6 @@ impl Default for UiConfig {
     fn default() -> Self {
         Self {
             language: "zh-CN".to_string(),
-            show_rdps: true,
         }
     }
 }

@@ -2,7 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { PlaceholderPanel } from '../../components/PlaceholderPanel';
 import type { AppRuntime } from '../../app/useAppRuntime';
 import { buildActionDamageBars, buildActorDamageBars, buildDamageTimeline } from '../../combat/charts';
-import type { CombatActionStats, CombatActorStats, CombatRecord } from '../../combat/models';
+import type { CombatActionNameMap } from '../../combat/actionNames';
+import type { CombatActionStats, CombatActorStats, CombatRecord, CombatTargetStats } from '../../combat/models';
+import { formatCombatRecordAreaName } from '../../combat/recordLabels';
+import { recalculateCombatRecord } from '../../combat/statistics';
 import type { GbfrActRawEvent } from '../../gbfr-act/events';
 import { callTauriCommand, isTauriRuntime } from '../../tauri/commands';
 
@@ -46,7 +49,7 @@ export function DashboardPage({ runtime }: DashboardPageProps) {
   const runtimeEntries = useMemo<SelectableCombatRecord[]>(
     () => records.map((record, index) => ({
       key: `runtime:${record.id}`,
-      label: `记录 ${index + 1}`,
+      label: formatCombatRecordAreaName(record, index + 1),
       source: 'runtime',
       record,
     })),
@@ -129,12 +132,17 @@ export function DashboardPage({ runtime }: DashboardPageProps) {
 
     try {
       const entries = await callTauriCommand<CombatHistoryEntry[]>('load_combat_history');
-      setHistoryEntries(sortHistoryEntries(entries));
+      const recalculatedEntries = entries.map((entry) => recalculateHistoryEntry(
+        entry,
+        runtime.actionNameMap,
+        runtime.loadoutTextMap?.actors,
+      ));
+      setHistoryEntries(sortHistoryEntries(recalculatedEntries));
       setHistoryStatus(`已加载 ${entries.length} 条历史记录。`);
     } catch (error) {
       setHistoryStatus(`加载历史记录失败：${errorToMessage(error)}`);
     }
-  }, []);
+  }, [runtime.actionNameMap, runtime.loadoutTextMap?.actors]);
 
   useEffect(() => {
     void loadCombatHistory();
@@ -252,7 +260,12 @@ export function DashboardPage({ runtime }: DashboardPageProps) {
       const entries = await callTauriCommand<CombatHistoryEntry[]>('import_combat_history', {
         path: historyTransferPath.trim() || null,
       });
-      setHistoryEntries((current) => mergeHistoryEntries(current, entries));
+      const recalculatedEntries = entries.map((entry) => recalculateHistoryEntry(
+        entry,
+        runtime.actionNameMap,
+        runtime.loadoutTextMap?.actors,
+      ));
+      setHistoryEntries((current) => mergeHistoryEntries(current, recalculatedEntries));
       setHistoryStatus(`已导入 ${entries.length} 条历史记录。`);
     } catch (error) {
       setHistoryStatus(`导入历史记录失败：${errorToMessage(error)}`);
@@ -343,6 +356,7 @@ export function DashboardPage({ runtime }: DashboardPageProps) {
                 selectedActorId={selectedActor?.id}
                 onSelectActor={setSelectedActorId}
               />
+              <TargetTable record={selectedRecord} />
               <ActionTable actor={selectedActor} actionNameStatus={runtime.actionNameStatus} />
               <PartyInfo record={selectedRecord} />
               <RecordRawEventsPanel record={selectedRecord} />
@@ -440,13 +454,17 @@ function RecordListButton({
   active: boolean;
   onSelect: (key: string) => void;
 }) {
+  const areaName = formatCombatRecordAreaName(entry.record);
+  const showEntryLabel = entry.label !== areaName;
+
   return (
     <button
       className={active ? 'record-list__item active' : 'record-list__item'}
       type="button"
       onClick={() => onSelect(entry.key)}
     >
-      <strong>{entry.label}</strong>
+      <strong>{areaName}</strong>
+      {showEntryLabel ? <span>{entry.label}</span> : null}
       <span>{formatAreaStrategy(entry.record.strategy)} · {formatNumber(entry.record.totalDamage)} 伤害</span>
       <span>{formatDuration(entry.record.durationMs)} · {entry.record.damageEventCount} 条伤害</span>
       {entry.historyEntry ? <span>保存于 {formatDateTime(entry.historyEntry.savedAt)}</span> : null}
@@ -471,14 +489,18 @@ function RecordToolbar({
   onRename?: () => void;
   onDelete?: () => void;
 }) {
+  const areaName = entry ? formatCombatRecordAreaName(entry.record) : '战斗记录';
+  const showEntryLabel = entry?.label && entry.label !== areaName;
+
   return (
     <section className="dashboard-record-toolbar">
       <div>
-        <h3>{entry?.label ?? '战斗记录'}</h3>
+        <h3>{areaName}</h3>
         <p>
           {entry?.source === 'history'
             ? `历史记录 · ${entry.historyEntry ? formatDateTime(entry.historyEntry.savedAt) : '--'}`
             : '当前实时/回放记录'}
+          {showEntryLabel ? ` · ${entry.label}` : ''}
         </p>
         {historyStatus ? <p className="debug-note">{historyStatus}</p> : null}
       </div>
@@ -595,6 +617,10 @@ function RecordOverview({ record }: { record: CombatRecord }) {
       <h3>总览</h3>
       <div className="summary-cards">
         <article>
+          <span>地图 / 区域</span>
+          <strong>{formatCombatRecordAreaName(record)}</strong>
+        </article>
+        <article>
           <span>总伤害</span>
           <strong>{formatNumber(record.totalDamage)}</strong>
         </article>
@@ -644,7 +670,6 @@ function TeamTable({ record, selectedActorId, onSelectActor }: TeamTableProps) {
               <th>总伤害</th>
               <th>DPS</th>
               <th>60 秒 DPS</th>
-              <th>rDPS</th>
               <th>占比</th>
               <th>死亡</th>
             </tr>
@@ -661,7 +686,6 @@ function TeamTable({ record, selectedActorId, onSelectActor }: TeamTableProps) {
                 <td>{formatNumber(actor.totalDamage)}</td>
                 <td>{formatNumber(actor.dps)}</td>
                 <td>{formatNumber(actor.dpsInLastMinute)}</td>
-                <td>{actor.rdps ?? '--'}</td>
                 <td>{formatPercent(actor.damageRate)}</td>
                 <td>{actor.deathCount}</td>
               </tr>
@@ -671,6 +695,59 @@ function TeamTable({ record, selectedActorId, onSelectActor }: TeamTableProps) {
       )}
     </section>
   );
+}
+
+function TargetTable({ record }: { record: CombatRecord }) {
+  const targets = record.targets ?? [];
+
+  return (
+    <section className="dashboard-section">
+      <h3>目标详情</h3>
+      {targets.length === 0 ? (
+        <p className="empty-state">当前记录没有可统计的目标伤害。</p>
+      ) : (
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>目标</th>
+              <th>DPS 口径</th>
+              <th>总承伤</th>
+              <th>占比</th>
+              <th>伤害事件</th>
+            </tr>
+          </thead>
+          <tbody>
+            {targets.map((target, index) => (
+              <TargetRow key={target.id} target={target} index={index} />
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
+  );
+}
+
+function TargetRow({ target, index }: { target: CombatTargetStats; index: number }) {
+  return (
+    <tr title={`actor=${target.actorType ?? '--'}；名称来源=${formatTargetNameSource(target.nameSource)}`}>
+      <td>{index + 1}</td>
+      <td>{target.name}</td>
+      <td>{target.includedInDps ? '计入' : target.exclusionReason ?? '排除'}</td>
+      <td>{formatNumber(target.totalDamage)}</td>
+      <td>{formatPercent(target.damageRate)}</td>
+      <td>{target.damageEventCount}</td>
+    </tr>
+  );
+}
+
+function formatTargetNameSource(source: CombatTargetStats['nameSource']) {
+  switch (source) {
+    case 'gbfr-act':
+      return 'GBFR-ACT';
+    default:
+      return 'fallback';
+  }
 }
 
 function ActionTable({ actor, actionNameStatus }: { actor?: CombatActorStats; actionNameStatus: string }) {
@@ -816,8 +893,10 @@ function getHistorySearchText(entry: CombatHistoryEntry) {
     entry.source,
     entry.record.id,
     entry.record.areaName,
+    formatCombatRecordAreaName(entry.record),
     entry.record.strategy,
     ...entry.record.actors.map((actor) => actor.name),
+    ...(entry.record.targets ?? []).map((target) => target.name),
   ]
     .filter(Boolean)
     .join('\n')
@@ -844,7 +923,7 @@ function createHistoryId() {
 }
 
 function createHistoryLabel(record: CombatRecord, savedAt: string) {
-  const area = record.areaName?.trim() || formatAreaStrategy(record.strategy);
+  const area = formatCombatRecordAreaName(record);
   return `${formatDateTime(savedAt)} · ${area} · ${formatNumber(record.totalDamage)}`;
 }
 
@@ -885,6 +964,21 @@ function formatAreaStrategy(strategy: string) {
   };
 
   return labels[strategy] ?? strategy;
+}
+
+function recalculateHistoryEntry(
+  entry: CombatHistoryEntry,
+  actionNameMap?: CombatActionNameMap,
+  actorTextMap?: Record<string, string>,
+): CombatHistoryEntry {
+  if (!Array.isArray(entry.record.rawEvents) || entry.record.rawEvents.length === 0) {
+    return entry;
+  }
+
+  return {
+    ...entry,
+    record: recalculateCombatRecord(entry.record, { actionNameMap, actorTextMap }),
+  };
 }
 
 function errorToMessage(error: unknown) {

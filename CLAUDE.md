@@ -8,7 +8,7 @@ GBFR-DPScheck 是 GBFR-ACT WebSocket 事件流客户端。
 
 - 不注入游戏进程。
 - 不实现 hook、绕过、隐藏、反检测或破坏性逻辑。
-- 不伪造 rDPS；缺少可靠归因数据时显示 `--`。
+- 不做团队增伤归因；当前只展示可从 GBFR-ACT 日志可靠计算的 DPS。
 - raw events 是核心调试资产，统计调整优先用 raw events 回放验证。
 - 本地 raw events 回放只用于无游戏调试，不是主产品形态。
 

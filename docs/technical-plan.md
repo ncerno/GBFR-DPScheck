@@ -1,6 +1,6 @@
 # 技术计划
 
-更新时间：2026-06-03
+更新时间：2026-06-04
 
 ## 目标
 
@@ -60,6 +60,7 @@ src/features/
   dashboard/
   debug/
   loadout/
+  onboarding/
   overlay/
   settings/
 ```
@@ -91,14 +92,18 @@ src-tauri/src/
 - UI 只展示 `CombatRecord` 和派生图表数据，不重新计算核心统计。
 - 原始事件保留在 `rawEvents`，方便回放和复算。
 - `useGbfrActStream.events` 是 Raw Event Viewer 展示缓冲，`useGbfrActStream.combatEvents` 是完整统计源。
-- `rDPS` 在缺少可靠归因数据前保持 `null` / `--`。
+- 统计只归属队伍玩家源的正伤害，敌方和场地伤害保留 raw events 但不计入团队 DPS。
+- 同队员的临时 actor / 分身按 actorType + objectId 归并回 party member。
+- `CombatTargetStats` 保留全部目标承伤明细。
+- 团队/个人 DPS 只统计主目标：排除投射物、场地、水晶、武器部件和低占比次要目标，Dashboard 目标表显示是否计入 DPS。
+- 不实现团队增伤归因字段和界面组件。当前 GBFR-ACT WebSocket 未提供 BUFF / DEBUFF 施加、移除或增伤归因事件，项目只展示可可靠计算的 DPS。
 - 本地 raw events 回放只作为调试辅助，不作为主产品形态。
 
 ## 战斗分段
 
 策略：
 
-- `auto`：根据区域名关键词自动识别。
+- `auto`：根据区域名关键词自动识别；未知或缺失区域名按任务处理。
 - `training`：木桩/训练/配装测试，使用较短空窗。
 - `quest`：任务/Boss/副本。
 - `generic`：通用区域。
@@ -112,10 +117,12 @@ src/combat/areaStrategy.ts
 分段规则：
 
 - `enter_area` 可启动新记录。
-- 长时间无伤害后下一次伤害可启动新记录。
+- 只有 `training` 下，长时间无伤害后下一次伤害可启动新记录，用于木桩多轮测试。
+- `quest` / `generic` 下不按空窗时间切段，主要依赖区域切换和手动重置。
 - `gbfr_dpscheck_manual_reset` 可手动切断当前记录。
 - 木桩默认空窗 10 秒。
-- 通用默认空窗 30 秒。
+- 通用空窗配置保留，但当前不再用于任务地图切分。
+- 当前实机日志中的 `enter_area` 多数没有 `area_name` 或 `area_id`，只能作为区域切换信号；真实地图名需要 GBFR-ACT 继续扩展上报字段。
 
 ## Overlay
 
@@ -127,13 +134,27 @@ src/combat/areaStrategy.ts
 - 透明、置顶、无边框、跳过任务栏。
 - 鼠标穿透开关。
 - 位置和尺寸持久化。
+- 独立 Overlay 采用固定逻辑尺寸整体缩放，窗口缩放时保持内部比例。
 - 开启鼠标穿透后，小窗提示回主窗口关闭穿透。
+- Overlay 窗口模式会强制 `html/body/#root` 透明，避免 WebView 根背景遮住透明窗口。
+- HUD 背景半透明，伤害色条使用高对比暗底和高不透明度色块。
+- 队员名在可用时显示 `玩家名（角色名）`。
+
+## 首次使用向导
+
+已实现：
+
+- 首页展示首次使用向导，未完整连接前保持展开。
+- 向导支持打开 GBFR-ACT 下载页。
+- 向导支持填写 `act_ws.py` 路径或 GBFR-ACT 文件夹路径。
+- 保存路径时后端校验并规范化为 `act_ws.py` 文件路径。
+- 保存后自动写入配置、加载文本资源并尝试启动 GBFR-ACT。
+- 向导提供连接 WebSocket 和打开 Overlay 小窗入口。
+- 设置页保留高级能力，但 Mock、Raw Events 和诊断信息默认收起。
 
 实机验收项：
 
-- 无边框窗口模式可见性。
-- 全屏独占模式可见性和限制说明。
-- 鼠标穿透与游戏操作冲突检查。
+- 无边框、透明、鼠标穿透和全屏基础表现已基本通过。
 - 长时间运行时的同步稳定性。
 
 ## Dashboard
@@ -213,10 +234,11 @@ npm run tauri:build
 发布前必须完成：
 
 - 干净 Windows 环境安装测试。
-- WebView2 依赖说明。
-- GBFR-ACT 授权和署名说明。
-- raw events / 历史记录隐私说明。
-- Overlay 全屏限制 FAQ。
+- 发布页引用 `docs/faq.md`。
+- 发布页引用 `docs/privacy.md`。
+- 发布页引用 `docs/third-party-notices.md`。
+- 发布页引用 `docs/user-quick-start.md`。
+- 按 `docs/clean-windows-test.md` 记录干净 Windows 验收结果。
 - CSP 已限制为本地资源、内联样式和本地 WebSocket 连接；如果后续支持非本机 WebSocket，需要同步扩展白名单。
 
 当前本机已通过 `npm run tauri:build`，生成：

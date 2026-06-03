@@ -1,140 +1,106 @@
 # GBFR-DPScheck
 
-GBFR-DPScheck 是一个基于 GBFR-ACT WebSocket 事件流的 Tauri 桌面客户端，用于《Granblue Fantasy: Relink》的实时 DPS Overlay、会话分析 Dashboard、配装测试和 raw events 调试回放。
+GBFR-DPScheck 是一个面向《Granblue Fantasy: Relink》的 DPS 小窗和战斗记录工具。
 
-项目只消费 GBFR-ACT 暴露的数据，不注入游戏进程，不实现 hook、绕过或反检测逻辑。
+它是在 [GBFR-ACT](https://github.com/nyaoouo/GBFR-ACT) 提供的本地 WebSocket 数据基础上做的桌面化优化迭代：保留 GBFR-ACT 的数据来源能力，另外补上更适合日常使用的透明 Overlay、历史记录、配装测试、目标过滤和更简单的启动流程。
 
-## 当前状态
+GBFR-DPScheck 不读取游戏进程，不注入游戏，不做 hook，也不绕过任何检测。它只连接你本机运行的 GBFR-ACT。
 
-已完成的主流程：
+## 能做什么
 
-- GBFR-ACT WebSocket 连接、服务检查和启动入口。
-- 自动启动 GBFR-ACT 开关已生效：加载配置后检查端口，不可连接时再尝试启动。
-- raw events 实时保存、清空、本地加载和调试回放。
-- `enter_area`、`load_party`、`damage`、`inc_death_cnt` 标准化。
-- 战斗分段：`auto` / `training` / `quest` / `generic`。
-- 木桩独立空窗秒数、通用空窗秒数、手动重置当前记录。
-- 统计模型：总伤害、DPS、最近 60 秒 DPS、占比、死亡、技能伤害统计。
-- 动作名映射：读取 GBFR-ACT `assets/act_ws_texts.js`，缺失时 fallback。
-- 配装文本解析：读取 GBFR-ACT `assets/dump_texts.js`，展示武器、因子、词条等摘要。
-- Overlay：主窗口内展示和独立透明置顶小窗基础版，鼠标穿透可从主窗口关闭。
-- Dashboard：当前记录、历史记录、队伍详情、技能详情、图表和 raw events 查看。
-- 配装测试：保存、读取、删除、筛选、排序、同角色多轮对比。
-- 历史记录：按目录保存、重命名、筛选、排序、导入、导出。
-- 统计源与 Raw Event Viewer 展示缓冲已拆分，长时间战斗统计不依赖最近 2000 条展示缓冲。
+- 在游戏上方显示一个半透明 DPS 小窗。
+- 显示团队 DPS、个人 DPS、总伤害、占比和最近 60 秒 DPS。
+- 小窗里显示 `玩家名（角色名）`，方便看清谁在操作哪个角色。
+- 自动连接 GBFR-ACT，支持后台启动，不再弹额外命令行窗口。
+- 保存战斗历史，重启后还能查看。
+- 记录技能伤害、角色伤害和目标承伤。
+- 保存配装测试，方便比较同一角色不同配置的表现。
+- 默认不保存 Raw Events，避免日志越积越多。
 
-仍需实机验收：
+## 使用前需要
 
-- 独立 Overlay 在真实游戏无边框窗口、全屏独占下的置顶、透明和鼠标穿透表现。
-- 实时游戏采集状态下的长时间稳定性和窗口兼容性。
+你需要准备：
 
-不做或暂不做：
+- Windows 10 / Windows 11
+- 游戏本体
+- GBFR-ACT
+- Python 3.11 64-bit
 
-- 不伪造 rDPS。缺少可靠归因数据时保持 `--`。
-- 不把本地 raw events 回放作为主要产品形态；它只用于无游戏时调试、复算和排错。
-- 不分发未授权的第三方代码。公开发布前需要确认 GBFR-ACT 相关授权。
+说明：
 
-## 本机开发
+- GBFR-DPScheck 不随安装包分发 GBFR-ACT。GBFR-ACT 是独立的第三方项目，需要用户自行下载。
+- 如果系统缺少 Microsoft Edge WebView2 Runtime，应用可能无法正常显示。多数 Windows 10/11 已经自带；缺少时按系统提示安装即可。
 
-安装依赖：
+## 第一次使用
 
-```bash
-npm install
-```
-
-前端构建：
-
-```bash
-npm run build
-```
-
-Tauri/Rust 检查建议在 Visual Studio 2022 DevCmd 中执行：
-
-```cmd
-call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
-cargo check --manifest-path "D:\yzy\GBFR-DPScheck\src-tauri\Cargo.toml" --offline
-```
-
-启动开发版：
-
-```cmd
-call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
-cd /d D:\yzy\GBFR-DPScheck
-npm run tauri:dev
-```
-
-只看前端页面：
-
-```bash
-npm run dev
-```
-
-默认 Vite 地址：
+1. 安装并启动 GBFR-DPScheck。
+2. 首页会出现“首次使用”向导。
+3. 如果还没有 GBFR-ACT，点击“打开 GBFR-ACT 下载页”，下载并解压。
+4. 在向导里填写 GBFR-ACT 的路径，可以填：
 
 ```text
-http://127.0.0.1:1420
+D:\Tools\GBFR-ACT\act_ws.py
 ```
 
-## 无游戏验证
-
-当前机器不能启动游戏时，可以用以下方式验证大部分功能：
-
-1. 启动前端或 Tauri 开发版。
-2. 打开“设置与调试”。
-3. 点击“写入 Mock 回放”或“写入木桩多轮 Mock”。
-4. 切到 Overlay、Dashboard、配装测试检查统计和图表。
-5. 在 Dashboard 保存当前记录为历史记录，验证筛选、重命名、导出、导入和 raw events 展开。
-
-## 数据文件
-
-默认应用数据目录由 Tauri `app_data_dir` 决定，Windows 上通常在：
+也可以直接填 GBFR-ACT 文件夹：
 
 ```text
-%APPDATA%\dev.ncerno.gbfr-dpscheck
+D:\Tools\GBFR-ACT
 ```
 
-主要文件：
+5. 点击“保存并启动”。
+6. 如果 Windows 弹出 UAC 管理员权限，点击允许。
+7. 点击“连接”。
+8. 点击“打开 Overlay 小窗”。
+9. 进入游戏打一轮木桩或任务，看到伤害后小窗会自动刷新。
+
+以后再打开 GBFR-DPScheck，会按保存好的路径自动尝试启动 GBFR-ACT、连接 WebSocket 并打开小窗。
+
+## 常见问题
+
+**为什么不把 GBFR-ACT 一起打进安装包？**
+
+GBFR-ACT 是第三方项目，当前仓库没有明确的再分发许可证。为了尊重原项目和避免授权风险，GBFR-DPScheck 不复制、不打包、不再发布 GBFR-ACT 的代码或资源。你需要单独下载 GBFR-ACT，本工具只连接它在本机提供的数据。
+
+**启动时还会弹窗口吗？**
+
+正常情况下不会再弹额外的黑色命令行窗口。需要管理员权限时，Windows 仍会显示 UAC 授权弹窗，这是正常行为。
+
+**全屏模式看不到 Overlay 怎么办？**
+
+优先使用无边框全屏或窗口化全屏。Windows 独占全屏下，透明置顶窗口可能被游戏或显卡驱动覆盖。
+
+**会自动保存大量日志吗？**
+
+不会。Raw Events 默认不落盘。只有你在设置里的“高级调试”手动开启或手动保存时，才会写入本地文件。
+
+**会上传我的数据吗？**
+
+不会。GBFR-DPScheck 不内置联网统计，不主动上传战斗记录。历史记录和 Raw Events 都保存在本机。
+
+## 当前限制
+
+- GBFR-DPScheck 依赖 GBFR-ACT 提供数据；GBFR-ACT 没有上报的信息，本工具不能凭空计算。
+- 当前不做团队增伤归因。GBFR-ACT 事件流没有可靠的 BUFF / DEBUFF 归因数据，因此界面只展示可从日志稳定计算的 DPS。
+- 真实地图名依赖 GBFR-ACT 上报；如果事件里没有地图名，只能按区域切换和任务策略处理。
+- 干净 Windows 环境安装测试仍在补充中。
+
+## 相关文档
+
+- 普通用户快速开始：[docs/user-quick-start.md](docs/user-quick-start.md)
+- 常见问题：[docs/faq.md](docs/faq.md)
+- 隐私说明：[docs/privacy.md](docs/privacy.md)
+- 第三方项目说明：[docs/third-party-notices.md](docs/third-party-notices.md)
+- 干净 Windows 验收清单：[docs/clean-windows-test.md](docs/clean-windows-test.md)
+- 发布状态：[docs/release-status.md](docs/release-status.md)
+- 项目进度与剩余事项：[docs/current-progress.md](docs/current-progress.md)
+
+## 第三方说明
+
+GBFR-ACT 项目地址：
 
 ```text
-config.json
-records/raw-events.jsonl
-records/loadout-tests.json
-records/combat-history/<history-id>/record.json
-records/combat-history/<history-id>/raw-events.jsonl
-records/combat-history-export.json
+https://github.com/nyaoouo/GBFR-ACT
 ```
 
-## 打包
-
-应用安装包打包命令：
-
-```cmd
-call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
-cd /d D:\yzy\GBFR-DPScheck
-npm run tauri:build
-```
-
-当前已验证可生成：
-
-```text
-src-tauri\target\release\bundle\msi\GBFR-DPScheck_0.1.0_x64_en-US.msi
-src-tauri\target\release\bundle\nsis\GBFR-DPScheck_0.1.0_x64-setup.exe
-```
-
-源代码和文档交付归档见：
-
-```text
-docs/release-package-2026-06-03.md
-```
-
-本地源代码归档：
-
-```text
-D:\yzy\GBFR-DPScheck-source-2026-06-03.zip
-```
-
-公开发布前需要补齐：
-
-- 干净 Windows 环境安装测试。
-- 管理员权限、端口占用、WebView2、Overlay 全屏限制等 FAQ。
-- 隐私说明：raw events 和历史记录可能包含用户名、系统路径等信息。
+Granblue Fantasy: Relink 及相关名称、角色和素材归其权利方所有。GBFR-DPScheck 是非官方工具，不代表游戏发行方、开发方或 GBFR-ACT 原作者。

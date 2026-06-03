@@ -22,8 +22,12 @@ export function OverlayWindowPage() {
   const [clickThrough, setClickThrough] = useState(false);
 
   useEffect(() => {
+    document.documentElement.classList.add('overlay-window-html');
     document.body.classList.add('overlay-window-body');
-    return () => document.body.classList.remove('overlay-window-body');
+    return () => {
+      document.documentElement.classList.remove('overlay-window-html');
+      document.body.classList.remove('overlay-window-body');
+    };
   }, []);
 
   useEffect(() => {

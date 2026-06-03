@@ -3,7 +3,8 @@ import { GBFR_DPSCHECK_MANUAL_RESET_EVENT } from '../gbfr-act/events';
 import type { CombatActionNameMap } from './actionNames';
 import { resolveAreaStrategy } from './areaStrategy';
 import type { CombatAreaStrategy, CombatPartyMember, CombatRecord } from './models';
-import { normalizeGbfrActEvent } from './normalizer';
+import { isTrackedPlayerDamageEvent, normalizeGbfrActEvent } from './normalizer';
+import { createFallbackAreaName } from './recordLabels';
 import { applyCombatEvent } from './statistics';
 
 export interface CombatSegmenterConfig {
@@ -11,6 +12,7 @@ export interface CombatSegmenterConfig {
   defaultStrategy: CombatAreaStrategy;
   trainingInactiveTimeoutSec?: number;
   actionNameMap?: CombatActionNameMap;
+  actorTextMap?: Record<string, string>;
 }
 
 export interface SegmentCombatEventsResult {
@@ -21,7 +23,7 @@ export interface SegmentCombatEventsResult {
 export function createEmptyCombatRecord(
   id: string,
   strategy: CombatAreaStrategy,
-  seed?: Pick<CombatRecord, 'areaName' | 'partyMembers'>,
+  seed?: Partial<Pick<CombatRecord, 'areaName' | 'partyMembers'>>,
 ): CombatRecord {
   return {
     id,
@@ -32,21 +34,10 @@ export function createEmptyCombatRecord(
     eventCount: 0,
     damageEventCount: 0,
     actors: [],
+    targets: [],
     partyMembers: seed?.partyMembers ?? [],
     rawEvents: [],
   };
-}
-
-export function shouldStartNewRecord(event: GbfrActRawEvent) {
-  return event.type === 'enter_area' || event.type === GBFR_DPSCHECK_MANUAL_RESET_EVENT;
-}
-
-export function appendEventToRecord(
-  record: CombatRecord,
-  event: GbfrActRawEvent,
-  config?: Pick<CombatSegmenterConfig, 'actionNameMap'>,
-): CombatRecord {
-  return applyCombatEvent(record, event, { actionNameMap: config?.actionNameMap });
 }
 
 export function segmentCombatEvents(
@@ -58,6 +49,7 @@ export function segmentCombatEvents(
   let current = createEmptyCombatRecord(
     createRecordId(recordIndex),
     resolveAreaStrategy(config.defaultStrategy),
+    { areaName: createFallbackAreaName(recordIndex) },
   );
 
   for (const event of events) {
@@ -70,7 +62,7 @@ export function segmentCombatEvents(
       }
 
       current = createEmptyCombatRecord(createRecordId(recordIndex), current.strategy, {
-        areaName: current.areaName,
+        areaName: current.areaName ?? createFallbackAreaName(recordIndex),
         partyMembers: current.partyMembers,
       });
       continue;
@@ -78,23 +70,29 @@ export function segmentCombatEvents(
 
     if (normalized.type === 'enter_area') {
       const nextStrategy = resolveAreaStrategy(config.defaultStrategy, normalized.areaName);
+      const nextAreaName = normalized.areaName?.trim();
 
       if (current.eventCount > 0 && shouldArchiveRecord(current)) {
         records.push(current);
         recordIndex += 1;
         current = createEmptyCombatRecord(createRecordId(recordIndex), nextStrategy, {
+          areaName: nextAreaName || createFallbackAreaName(recordIndex),
           partyMembers: current.partyMembers,
         });
       } else {
         current = {
           ...current,
+          areaName: nextAreaName || current.areaName || createFallbackAreaName(recordIndex),
           strategy: nextStrategy,
         };
       }
     }
 
+    const isTrackedDamage = normalized.type === 'damage' && isTrackedPlayerDamageEvent(normalized, current.partyMembers);
+
     if (
-      normalized.type === 'damage'
+      isTrackedDamage
+      && shouldSplitOnInactiveTimeout(current.strategy)
       && current.lastDamageAtMs !== undefined
       && current.damageEventCount > 0
       && normalized.timeMs - current.lastDamageAtMs > getInactiveTimeoutMs(current.strategy, config)
@@ -102,15 +100,18 @@ export function segmentCombatEvents(
       records.push(current);
       recordIndex += 1;
       current = createEmptyCombatRecord(createRecordId(recordIndex), current.strategy, {
-        areaName: current.areaName,
+        areaName: current.areaName ?? createFallbackAreaName(recordIndex),
         partyMembers: current.partyMembers,
       });
     }
 
-    current = applyCombatEvent(current, event, { actionNameMap: config.actionNameMap });
+    current = applyCombatEvent(current, event, {
+      actionNameMap: config.actionNameMap,
+      actorTextMap: config.actorTextMap,
+    });
   }
 
-  if (current.eventCount > 0 || current.damageEventCount > 0) {
+  if (shouldArchiveRecord(current)) {
     records.push(current);
   }
 
@@ -125,7 +126,11 @@ function createRecordId(index: number) {
 }
 
 function shouldArchiveRecord(record: CombatRecord) {
-  return record.damageEventCount > 0 || record.partyMembers.length > 0;
+  return record.damageEventCount > 0;
+}
+
+function shouldSplitOnInactiveTimeout(strategy: CombatAreaStrategy) {
+  return strategy === 'training';
 }
 
 function getInactiveTimeoutMs(strategy: CombatAreaStrategy, config: CombatSegmenterConfig) {

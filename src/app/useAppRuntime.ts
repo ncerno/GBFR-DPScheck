@@ -10,9 +10,11 @@ import { parseGbfrActActionNameText } from '../combat/gbfrActActionTextParser';
 import type { GbfrActLoadoutTextMap } from '../features/loadout/loadoutText';
 import { parseGbfrActDumpText } from '../features/loadout/loadoutText';
 import { callTauriCommand, isTauriRuntime } from '../tauri/commands';
+import { openOverlayWindow } from './overlayWindow';
 
 export function useAppRuntime() {
   const [config, setConfig] = useState<AppConfig>(fallbackAppConfig);
+  const [configLoaded, setConfigLoaded] = useState(!isTauriRuntime());
   const [serviceStatus, setServiceStatus] = useState<GbfrActServiceStatus | null>(null);
   const [diagnostics, setDiagnostics] = useState<AppDiagnostics | null>(null);
   const [actionNameMap, setActionNameMap] = useState<CombatActionNameMap | undefined>();
@@ -21,6 +23,7 @@ export function useAppRuntime() {
   const [loadoutTextStatus, setLoadoutTextStatus] = useState('配装文本未加载，使用 raw ID。');
   const [operationMessage, setOperationMessage] = useState<string>('');
   const autoStartAttemptedRef = useRef(false);
+  const autoOverlayOpenedRef = useRef(false);
 
   const saveRawEvent = useCallback(async (event: GbfrActRawEvent) => {
     if (!config.combat.keep_raw_events) {
@@ -49,11 +52,13 @@ export function useAppRuntime() {
     trainingInactiveTimeoutSec: config.combat.training_inactive_timeout_sec,
     defaultStrategy: config.combat.area_strategy as CombatAreaStrategy,
     actionNameMap,
+    actorTextMap: loadoutTextMap?.actors,
   }), [
     actionNameMap,
     config.combat.area_strategy,
     config.combat.inactive_timeout_sec,
     config.combat.training_inactive_timeout_sec,
+    loadoutTextMap,
     stream.combatEvents,
   ]);
 
@@ -104,7 +109,12 @@ export function useAppRuntime() {
   }, []);
 
   const autoStartGbfrAct = useCallback(async (nextConfig: AppConfig) => {
-    if (!nextConfig.gbfr_act.auto_start || autoStartAttemptedRef.current || !isTauriRuntime()) {
+    if (nextConfig.gbfr_act.auto_start === false || autoStartAttemptedRef.current || !isTauriRuntime()) {
+      return;
+    }
+
+    if (!nextConfig.gbfr_act.act_ws_path) {
+      setOperationMessage('首次使用请先选择 GBFR-ACT 的 act_ws.py 路径。');
       return;
     }
 
@@ -133,13 +143,15 @@ export function useAppRuntime() {
     }
 
     try {
-      const nextConfig = await callTauriCommand<AppConfig>('get_app_config');
+      const loadedConfig = await callTauriCommand<AppConfig>('get_app_config');
+      const nextConfig = withAppConfigDefaults(loadedConfig);
       setConfig(nextConfig);
+      setConfigLoaded(true);
       const nextDiagnostics = await callTauriCommand<AppDiagnostics>('get_app_diagnostics');
       setDiagnostics(nextDiagnostics);
       void loadActionNameMap();
       void loadLoadoutTextMap();
-      if (nextConfig.gbfr_act.auto_start) {
+      if (nextConfig.gbfr_act.auto_start !== false) {
         setOperationMessage('配置已加载，正在检查自动启动 GBFR-ACT。');
         void autoStartGbfrAct(nextConfig);
       } else {
@@ -153,6 +165,49 @@ export function useAppRuntime() {
   useEffect(() => {
     void loadConfig();
   }, [loadConfig]);
+
+  useEffect(() => {
+    if (!configLoaded || !isTauriRuntime() || config.gbfr_act.auto_connect === false) {
+      return undefined;
+    }
+
+    if (!['idle', 'disconnected', 'error'].includes(stream.connection.status)) {
+      return undefined;
+    }
+
+    const retryDelayMs = stream.connection.status === 'error' ? 3000 : 1200;
+    const timer = window.setTimeout(() => {
+      stream.connect();
+    }, retryDelayMs);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    config.gbfr_act.auto_connect,
+    config.gbfr_act.websocket_url,
+    configLoaded,
+    stream,
+    stream.connection.status,
+  ]);
+
+  useEffect(() => {
+    if (
+      !configLoaded
+      || !isTauriRuntime()
+      || config.overlay.auto_open === false
+      || autoOverlayOpenedRef.current
+    ) {
+      return undefined;
+    }
+
+    autoOverlayOpenedRef.current = true;
+    const timer = window.setTimeout(() => {
+      void openOverlayWindow(config)
+        .then(() => setOperationMessage('Overlay 独立窗口已自动打开。'))
+        .catch((error) => setOperationMessage(`自动打开 Overlay 独立窗口失败：${errorToMessage(error)}`));
+    }, 1600);
+
+    return () => window.clearTimeout(timer);
+  }, [config, configLoaded]);
 
   const updateGbfrActConfig = useCallback((field: keyof AppConfig['gbfr_act'], value: string | boolean | null) => {
     setConfig((current) => ({
@@ -198,10 +253,36 @@ export function useAppRuntime() {
       source,
       persist: source === 'live' && config.combat.keep_raw_events,
     });
-    setOperationMessage(source === 'live'
-      ? '已手动重置当前战斗记录，并写入内部重置标记用于后续回放分段。'
-      : '已手动重置当前调试回放记录，不会写入 Raw Events 文件。');
+    if (source === 'live' && config.combat.keep_raw_events) {
+      setOperationMessage('已手动重置当前战斗记录，并写入内部重置标记用于后续回放分段。');
+    } else if (source === 'live') {
+      setOperationMessage('已手动重置当前战斗记录。Raw Events 采集未开启，不会写入本地日志。');
+    } else {
+      setOperationMessage('已手动重置当前调试回放记录，不会写入 Raw Events 文件。');
+    }
   }, [config.combat.keep_raw_events, stream]);
+
+  const saveCurrentRawEvents = useCallback(async () => {
+    if (!isTauriRuntime()) {
+      setOperationMessage('当前是浏览器开发环境，无法写入本地 Raw Events。');
+      return;
+    }
+
+    const events = [...stream.combatEvents].reverse();
+    if (events.length === 0) {
+      setOperationMessage('当前没有可保存的 Raw Events。');
+      return;
+    }
+
+    try {
+      for (const event of events) {
+        await callTauriCommand<void>('save_raw_event', { event });
+      }
+      setOperationMessage(`已手动追加保存 ${events.length} 条 Raw Events 到本地文件。`);
+    } catch (error) {
+      setOperationMessage(`手动保存 Raw Events 失败：${errorToMessage(error)}`);
+    }
+  }, [stream.combatEvents]);
 
   const saveConfig = useCallback(async () => {
     if (!isTauriRuntime()) {
@@ -218,6 +299,51 @@ export function useAppRuntime() {
       setOperationMessage(`配置保存失败：${errorToMessage(error)}`);
     }
   }, [config, loadActionNameMap, loadLoadoutTextMap]);
+
+  const configureGbfrActPath = useCallback(async (path: string) => {
+    if (!isTauriRuntime()) {
+      setOperationMessage('当前是浏览器开发环境，无法保存 GBFR-ACT 路径。');
+      return;
+    }
+
+    try {
+      const normalizedPath = await callTauriCommand<string>('normalize_gbfr_act_path', { path });
+      const nextConfig: AppConfig = {
+        ...config,
+        gbfr_act: {
+          ...config.gbfr_act,
+          act_ws_path: normalizedPath,
+          auto_start: true,
+          auto_connect: true,
+        },
+      };
+
+      setConfig(nextConfig);
+      await callTauriCommand<void>('save_app_config', { config: nextConfig });
+      void loadActionNameMap();
+      void loadLoadoutTextMap();
+
+      const status = await callTauriCommand<GbfrActServiceStatus>('start_gbfr_act_service');
+      setServiceStatus(status);
+      setOperationMessage(status.message ?? 'GBFR-ACT 路径已保存，正在尝试启动服务。');
+    } catch (error) {
+      setOperationMessage(`配置 GBFR-ACT 失败：${errorToMessage(error)}`);
+    }
+  }, [config, loadActionNameMap, loadLoadoutTextMap]);
+
+  const openGbfrActDownloadPage = useCallback(async () => {
+    if (!isTauriRuntime()) {
+      window.open('https://github.com/nyaoouo/GBFR-ACT', '_blank', 'noopener,noreferrer');
+      return;
+    }
+
+    try {
+      await callTauriCommand<void>('open_gbfr_act_download_page');
+      setOperationMessage('已打开 GBFR-ACT 下载页。下载后在向导中填写 act_ws.py 路径。');
+    } catch (error) {
+      setOperationMessage(`打开 GBFR-ACT 下载页失败：${errorToMessage(error)}`);
+    }
+  }, []);
 
   const checkService = useCallback(async () => {
     if (!isTauriRuntime()) {
@@ -286,6 +412,7 @@ export function useAppRuntime() {
     config,
     serviceStatus,
     diagnostics,
+    actionNameMap,
     actionNameStatus,
     loadoutTextMap,
     loadoutTextStatus,
@@ -296,7 +423,10 @@ export function useAppRuntime() {
     updateOverlayConfig,
     updateCombatConfig,
     resetCurrentCombatRecord,
+    saveCurrentRawEvents,
     saveConfig,
+    configureGbfrActPath,
+    openGbfrActDownloadPage,
     checkService,
     startService,
     clearSavedRawEvents,
@@ -309,6 +439,29 @@ export function useAppRuntime() {
 
 function errorToMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
+}
+
+function withAppConfigDefaults(config: AppConfig): AppConfig {
+  return {
+    ...fallbackAppConfig,
+    ...config,
+    gbfr_act: {
+      ...fallbackAppConfig.gbfr_act,
+      ...config.gbfr_act,
+    },
+    overlay: {
+      ...fallbackAppConfig.overlay,
+      ...config.overlay,
+    },
+    combat: {
+      ...fallbackAppConfig.combat,
+      ...config.combat,
+    },
+    ui: {
+      ...fallbackAppConfig.ui,
+      ...config.ui,
+    },
+  };
 }
 
 export type AppRuntime = ReturnType<typeof useAppRuntime>;

@@ -33,6 +33,16 @@ pub async fn start_gbfr_act_service(app: AppHandle) -> Result<GbfrActServiceStat
 }
 
 #[tauri::command]
+pub async fn normalize_gbfr_act_path(path: String) -> Result<String, String> {
+    crate::gbfr_act::normalize_act_ws_path(&path)
+}
+
+#[tauri::command]
+pub async fn open_gbfr_act_download_page() -> Result<(), String> {
+    crate::gbfr_act::open_download_page()
+}
+
+#[tauri::command]
 pub async fn load_gbfr_act_action_texts(app: AppHandle) -> Result<Option<String>, String> {
     let config = crate::config::load_config(&app)?;
     crate::gbfr_act::load_action_texts(&config)

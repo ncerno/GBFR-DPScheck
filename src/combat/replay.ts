@@ -8,6 +8,7 @@ export interface ReplayCombatEventsOptions {
   trainingInactiveTimeoutSec?: number;
   defaultStrategy?: CombatAreaStrategy;
   actionNameMap?: CombatActionNameMap;
+  actorTextMap?: Record<string, string>;
 }
 
 export function replayCombatEvents(events: GbfrActRawEvent[], options: ReplayCombatEventsOptions = {}) {
@@ -16,5 +17,6 @@ export function replayCombatEvents(events: GbfrActRawEvent[], options: ReplayCom
     trainingInactiveTimeoutSec: options.trainingInactiveTimeoutSec,
     defaultStrategy: options.defaultStrategy ?? 'generic',
     actionNameMap: options.actionNameMap,
+    actorTextMap: options.actorTextMap,
   });
 }

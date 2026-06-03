@@ -13,6 +13,8 @@ pub fn run() {
             commands::save_app_config,
             commands::check_gbfr_act_service,
             commands::start_gbfr_act_service,
+            commands::normalize_gbfr_act_path,
+            commands::open_gbfr_act_download_page,
             commands::load_gbfr_act_action_texts,
             commands::load_gbfr_act_dump_texts,
             commands::save_raw_event,

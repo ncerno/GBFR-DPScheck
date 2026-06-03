@@ -97,9 +97,16 @@ git diff --check
 
 ## 后续发布材料
 
+2026-06-04 已补充：
+
+- `docs/faq.md`：管理员权限、端口占用、WebView2、全屏 Overlay 限制。
+- `docs/privacy.md`：raw events / 历史记录隐私说明。
+- `docs/third-party-notices.md`：GBFR-ACT 第三方项目说明和署名策略。
+- `docs/clean-windows-test.md`：干净 Windows 环境安装、连接、Overlay、数据持久化和卸载验收步骤。
+- `docs/user-quick-start.md`：面向普通用户的最短启动流程。
+- `docs/release-status.md`：当前完成项、待验收项和后续增强项。
+
 公开发布前仍建议补充：
 
-- GBFR-ACT 授权和署名说明。
-- raw events / 历史记录隐私说明。
-- 管理员权限、端口占用、WebView2、全屏 Overlay 限制 FAQ。
 - 安装包在干净 Windows 环境的截图或验收记录。
+- 长时间实机运行稳定性记录。

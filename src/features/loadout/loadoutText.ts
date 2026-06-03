@@ -45,23 +45,43 @@ export interface NamedLevel {
 }
 
 const emptyHash = '887AE0B0';
+const loadoutTextLanguageCandidates = ['zhs', 'zh', 'zht', 'ja', 'en'];
+
+type DumpTextCategory = Record<string, DumpTextEntry>;
+
+interface DumpTextLanguageBlock {
+  actors?: DumpTextCategory;
+  weapons?: DumpTextCategory;
+  sigils?: DumpTextCategory;
+  skills?: DumpTextCategory;
+  items?: DumpTextCategory;
+  over_mastery?: DumpTextCategory;
+}
 
 export function parseGbfrActDumpText(text: string): GbfrActLoadoutTextMap {
   const objectText = findAssignedObject(text, 'window.dump_texts');
-  const parsed = JSON.parse(objectText) as Record<string, Record<string, Record<string, DumpTextEntry>>>;
-  const zhs = parsed.zhs;
-  if (!zhs) {
-    throw new Error('GBFR-ACT dump_texts.js 缺少 zhs 文本。');
-  }
+  const parsed = JSON.parse(objectText) as Record<string, DumpTextLanguageBlock>;
+  const languageBlock = pickLoadoutTextLanguageBlock(parsed);
 
   return {
-    actors: keyAsText(zhs.actors),
-    weapons: hashAsText(zhs.weapons),
-    sigils: hashAsText(zhs.sigils),
-    skills: hashAsText(zhs.skills),
-    items: hashAsText(zhs.items),
-    overMastery: hashAsText(zhs.over_mastery),
+    actors: keyAsText(languageBlock.actors),
+    weapons: hashAsText(languageBlock.weapons),
+    sigils: hashAsText(languageBlock.sigils),
+    skills: hashAsText(languageBlock.skills),
+    items: hashAsText(languageBlock.items),
+    overMastery: hashAsText(languageBlock.over_mastery),
   };
+}
+
+function pickLoadoutTextLanguageBlock(parsed: Record<string, DumpTextLanguageBlock>) {
+  for (const language of loadoutTextLanguageCandidates) {
+    const block = parsed[language];
+    if (block) {
+      return block;
+    }
+  }
+
+  throw new Error(`GBFR-ACT dump_texts.js 缺少可用文本语言块：${loadoutTextLanguageCandidates.join(', ')}`);
 }
 
 export function resolveLoadoutInfo(rawLoadout: RawLoadoutInfo | undefined, textMap: GbfrActLoadoutTextMap | undefined): ResolvedLoadoutInfo | undefined {
@@ -239,7 +259,7 @@ function keyAsText(entries: Record<string, DumpTextEntry> | undefined) {
   const result: Record<string, string> = {};
   for (const entry of Object.values(entries ?? {})) {
     if (entry?.key && entry?.text) {
-      result[entry.key] = entry.text;
+      result[entry.key.toUpperCase()] = entry.text;
     }
   }
   return result;

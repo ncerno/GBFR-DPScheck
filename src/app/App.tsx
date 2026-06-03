@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DashboardPage } from '../features/dashboard/DashboardPage';
 import { LoadoutPage } from '../features/loadout/LoadoutPage';
+import { SetupAssistant } from '../features/onboarding/SetupAssistant';
 import { OverlayPage } from '../features/overlay/OverlayPage';
 import { OverlayWindowPage } from '../features/overlay/OverlayWindowPage';
 import { OVERLAY_CLICK_THROUGH_EVENT } from '../features/overlay/overlaySnapshot';
@@ -58,15 +59,6 @@ function MainApp() {
     };
   }, [runtime.updateOverlayConfig]);
 
-  const currentTitle = useMemo(() => appRoutes.find((item) => item.key === route)?.label, [route]);
-
-  const pageMap: Record<AppRouteKey, JSX.Element> = {
-    overlay: <OverlayPage runtime={runtime} />,
-    dashboard: <DashboardPage runtime={runtime} />,
-    loadout: <LoadoutPage runtime={runtime} />,
-    settings: <SettingsPage runtime={runtime} />,
-  };
-
   const handleOpenOverlayWindow = useCallback(async () => {
     try {
       await openOverlayWindow(runtime.config);
@@ -90,6 +82,15 @@ function MainApp() {
       runtime.setOperationMessage(`设置 Overlay 鼠标穿透失败：${errorToMessage(error)}`);
     }
   }, [overlayClickThrough, runtime]);
+
+  const currentTitle = useMemo(() => appRoutes.find((item) => item.key === route)?.label, [route]);
+
+  const pageMap: Record<AppRouteKey, JSX.Element> = {
+    overlay: <OverlayPage runtime={runtime} />,
+    dashboard: <DashboardPage runtime={runtime} />,
+    loadout: <LoadoutPage runtime={runtime} />,
+    settings: <SettingsPage runtime={runtime} />,
+  };
 
   return (
     <main className="app-shell">
@@ -121,6 +122,10 @@ function MainApp() {
           </div>
         </div>
       </header>
+      {runtime.operationMessage ? (
+        <p className="operation-message app-operation-message">{runtime.operationMessage}</p>
+      ) : null}
+      <SetupAssistant runtime={runtime} onOpenOverlayWindow={() => void handleOpenOverlayWindow()} />
       {pageMap[route]}
     </main>
   );

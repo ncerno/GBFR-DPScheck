@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { PlaceholderPanel } from '../../components/PlaceholderPanel';
 import type { AppRuntime } from '../../app/useAppRuntime';
 import type { CombatActorStats, CombatPartyMember, CombatRecord } from '../../combat/models';
+import { formatCombatRecordAreaName } from '../../combat/recordLabels';
 import { callTauriCommand, isTauriRuntime } from '../../tauri/commands';
 import type { RawLoadoutInfo, ResolvedLoadoutInfo } from './loadoutText';
 import { resolveLoadoutInfo, summarizeResolvedLoadout } from './loadoutText';
@@ -252,7 +253,7 @@ export function LoadoutPage({ runtime }: LoadoutPageProps) {
                   >
                     {records.map((record, index) => (
                       <option key={record.id} value={record.id}>
-                        记录 {index + 1} · {formatNumber(record.totalDamage)} 伤害 · {formatDuration(record.durationMs)}
+                        {formatCombatRecordAreaName(record, index + 1)} · {formatNumber(record.totalDamage)} 伤害 · {formatDuration(record.durationMs)}
                       </option>
                     ))}
                   </select>
@@ -396,6 +397,7 @@ export function LoadoutPage({ runtime }: LoadoutPageProps) {
               <tr>
                 <th>时间</th>
                 <th>名称</th>
+                <th>地图</th>
                 <th>角色</th>
                 <th>DPS</th>
                 <th>60 秒 DPS</th>
@@ -412,6 +414,7 @@ export function LoadoutPage({ runtime }: LoadoutPageProps) {
                 <tr key={test.id}>
                   <td>{formatDateTime(test.createdAt)}</td>
                   <td>{test.label}</td>
+                  <td>{test.areaName ?? '--'}</td>
                   <td>{test.characterName}</td>
                   <td>{formatNumber(test.actorDps)}</td>
                   <td>{formatNumber(test.actorDpsInLastMinute)}</td>
@@ -637,6 +640,10 @@ function RecordSnapshot({ record, actor }: { record: CombatRecord; actor?: Comba
   return (
     <div className="summary-cards">
       <article>
+        <span>地图 / 区域</span>
+        <strong>{formatCombatRecordAreaName(record)}</strong>
+      </article>
+      <article>
         <span>团队总伤害</span>
         <strong>{formatNumber(record.totalDamage)}</strong>
       </article>
@@ -670,7 +677,7 @@ function createLoadoutTestRecord(
     createdAt,
     label: form.label.trim() || `${characterName} ${formatDateTime(createdAt)}`,
     combatRecordId: record.id,
-    areaName: record.areaName,
+    areaName: formatCombatRecordAreaName(record),
     characterName,
     actorName: actor.name,
     actorId: actor.id,

@@ -3,8 +3,8 @@ import { OVERLAY_CLICK_THROUGH_EVENT, OVERLAY_WINDOW_LABEL } from '../features/o
 import { callTauriCommand, isTauriRuntime } from '../tauri/commands';
 
 const OVERLAY_WINDOW_URL = 'index.html?window=overlay';
-const DEFAULT_OVERLAY_WIDTH = 760;
-const DEFAULT_OVERLAY_HEIGHT = 520;
+const DEFAULT_OVERLAY_WIDTH = 420;
+const DEFAULT_OVERLAY_HEIGHT = 260;
 
 export function isOverlayWindowMode() {
   return new URLSearchParams(window.location.search).get('window') === 'overlay';
@@ -17,9 +17,9 @@ export async function openOverlayWindow(config: AppConfig) {
   const existing = await WebviewWindow.getByLabel(OVERLAY_WINDOW_LABEL);
   if (existing) {
     await existing.show();
-    await existing.setFocus();
     await existing.setAlwaysOnTop(config.overlay.always_on_top);
     await existing.setIgnoreCursorEvents(config.overlay.click_through);
+    await existing.setFocus();
     return;
   }
 
@@ -28,8 +28,8 @@ export async function openOverlayWindow(config: AppConfig) {
     title: 'GBFR-DPScheck Overlay',
     width: config.overlay.window_width ?? DEFAULT_OVERLAY_WIDTH,
     height: config.overlay.window_height ?? DEFAULT_OVERLAY_HEIGHT,
-    minWidth: 520,
-    minHeight: 280,
+    minWidth: 320,
+    minHeight: 180,
     transparent: true,
     decorations: false,
     alwaysOnTop: config.overlay.always_on_top,
@@ -53,6 +53,8 @@ export async function openOverlayWindow(config: AppConfig) {
     void overlayWindow.once('tauri://created', () => {
       void overlayWindow
         .setIgnoreCursorEvents(config.overlay.click_through)
+        .then(() => overlayWindow.show())
+        .then(() => overlayWindow.setFocus())
         .then(resolve)
         .catch(reject);
     }).catch(reject);

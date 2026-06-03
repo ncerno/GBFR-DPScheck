@@ -42,7 +42,7 @@ export function resolveAreaStrategy(defaultStrategy: CombatAreaStrategy, areaNam
 
   const normalizedAreaName = normalizeAreaName(areaName);
   if (!normalizedAreaName) {
-    return 'generic';
+    return 'quest';
   }
 
   if (containsAnyKeyword(normalizedAreaName, trainingAreaKeywords)) {
@@ -53,14 +53,7 @@ export function resolveAreaStrategy(defaultStrategy: CombatAreaStrategy, areaNam
     return 'quest';
   }
 
-  return 'generic';
-}
-
-export function getAreaStrategyKeywordSnapshot() {
-  return {
-    training: [...trainingAreaKeywords],
-    quest: [...questAreaKeywords],
-  };
+  return 'quest';
 }
 
 function normalizeAreaName(areaName?: string) {

@@ -1,9 +1,9 @@
 import type { CombatActionNameMap } from './actionNames';
 
+const actionNameLanguageCandidates = ['zhs', 'zh', 'zht', 'ja', 'en'];
+
 export function parseGbfrActActionNameText(text: string): CombatActionNameMap {
-  const zhsBlock = findPropertyObject(text, 'zhs');
-  const gameBlock = findPropertyObject(zhsBlock, 'game');
-  const actionsBlock = findPropertyObject(gameBlock, 'actions');
+  const actionsBlock = findActionsBlock(text);
   const jsonText = toJsonObjectText(actionsBlock);
   const parsed = JSON.parse(jsonText) as Record<string, Record<string, string> | string>;
   const common = readActionGroup(parsed.common);
@@ -24,6 +24,20 @@ export function parseGbfrActActionNameText(text: string): CombatActionNameMap {
     common: remapCommonActionKeys(common),
     actors,
   };
+}
+
+function findActionsBlock(text: string) {
+  for (const language of actionNameLanguageCandidates) {
+    try {
+      const languageBlock = findPropertyObject(text, language);
+      const gameBlock = findPropertyObject(languageBlock, 'game');
+      return findPropertyObject(gameBlock, 'actions');
+    } catch {
+      continue;
+    }
+  }
+
+  throw new Error(`未找到可用的动作名语言块：${actionNameLanguageCandidates.join(', ')}`);
 }
 
 function readActionGroup(value: unknown): Record<string, string> {
