@@ -6,7 +6,7 @@
 
 ## 第一次使用
 
-1. 安装并启动 GBFR-DPScheck。
+1. 从 Releases 页面下载并安装 `GBFR-DPScheck_0.1.0_x64-setup.exe`。
 2. 如果没有 GBFR-ACT，点击“打开 GBFR-ACT 下载页”，下载后解压到固定目录。
 3. 在向导里填写 GBFR-ACT 的 `act_ws.py` 路径；也可以直接填写 GBFR-ACT 文件夹。
 4. 点击“保存并启动”。
